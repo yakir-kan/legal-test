@@ -6,16 +6,15 @@ import subprocess
 from tempfile import NamedTemporaryFile
 from pypdf import PdfReader, PdfWriter
 from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 
 # ==========================================
 # 1. הגדרות עיצוב ו-UX
 # ==========================================
 st.set_page_config(
-    page_title="מערכת נספחים | Law-Gic Style",
+    page_title="Law-Gic Pro | מערכת נספחים",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 st.markdown("""
@@ -27,7 +26,6 @@ st.markdown("""
         direction: rtl;
     }
     
-    /* כותרות */
     h1, h2, h3 { color: #1a2a40; font-weight: 700; text-align: right; }
     
     /* אזור גרירה */
@@ -37,14 +35,6 @@ st.markdown("""
         padding: 20px; border-radius: 8px;
     }
     
-    /* שדות קלט ראשיים */
-    .main-input input {
-        border: 1px solid #1a2a40;
-        background-color: #f0f2f6;
-        color: #1a2a40;
-        font-weight: bold;
-    }
-
     /* כפתור הורדה */
     div.stDownloadButton > button {
         background-color: #1a2a40;
@@ -52,6 +42,12 @@ st.markdown("""
         width: 100%;
         padding: 15px;
         font-size: 18px;
+    }
+    
+    /* מסגרת לתצוגה מקדימה */
+    .pdf-container {
+        border: 1px solid #ddd;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -68,7 +64,6 @@ def count_pdf_pages(file_bytes):
         return 0
 
 def generate_html_cover(number, title, page_num):
-    # שער נקי לכל נספח
     return f"""
     <!DOCTYPE html>
     <html dir="rtl">
@@ -88,7 +83,6 @@ def generate_html_cover(number, title, page_num):
     """
 
 def generate_toc_html(items):
-    # יצירת תוכן עניינים בעיצוב שביקשת (כמו בתמונה)
     rows_html = ""
     for item in items:
         rows_html += f"""
@@ -154,8 +148,7 @@ def html_to_pdf_bytes(html_content):
 
 def add_page_numbers_overlay(pdf_bytes):
     """
-    פונקציה זו מוסיפה מספור רציף (1, 2, 3...)
-    בתחתית העמוד במרכז, גודל 12, ספרה בלבד.
+    מוסיף מספור דינמי - מזהה אם הדף לרוחב או לאורך וממקם בהתאם.
     """
     reader = PdfReader(BytesIO(pdf_bytes))
     writer = PdfWriter()
@@ -166,31 +159,26 @@ def add_page_numbers_overlay(pdf_bytes):
         page = reader.pages[i]
         page_num = i + 1
         
-        # יצירת קובץ PDF שקוף שרשום עליו רק המספר
-        packet = BytesIO()
-        can = canvas.Canvas(packet, pagesize=A4)
+        # 1. זיהוי מידות הדף הנוכחי (חשוב לדפי בנק לרוחב!)
+        # Mediabox נותן את [x, y, width, height]
+        page_width = float(page.mediabox.width)
+        page_height = float(page.mediabox.height)
         
-        # הגדרות מספור
-        # מיקום: אמצע רוחב העמוד, 10 מ"מ מלמטה
-        # פונט: Helvetica (סטנדרטי למספרים), גודל 12
-        width, height = A4
+        # 2. יצירת קנבס בדיוק במידות של הדף הזה
+        packet = BytesIO()
+        can = canvas.Canvas(packet, pagesize=(page_width, page_height))
         can.setFont("Helvetica", 12)
         
-        # ציור המספר
-        can.drawCentredString(width / 2.0, 10 * mm, str(page_num))
-        
-        # אם רוצים "לדרוס" את מה שכתוב למטה, אפשר לצייר מלבן לבן קטן מאחורי המספר:
-        # can.setFillColorRGB(1, 1, 1) # לבן
-        # can.rect((width/2.0)-10, 5*mm, 20, 15, fill=1, stroke=0)
-        # can.setFillColorRGB(0, 0, 0) # שחור למספר
+        # 3. ציור המספר: תמיד באמצע הרוחב, ותמיד 10 מ"מ מלמטה
+        # זה עובד גם אם הדף לרוחב וגם אם לאורך, כי אנחנו לוקחים את ה-width הספציפי שלו
+        can.drawCentredString(page_width / 2.0, 10 * mm, str(page_num))
         
         can.save()
         packet.seek(0)
         
-        # איחוד המספר עם העמוד המקורי
+        # 4. מיזוג
         number_pdf = PdfReader(packet)
         page.merge_page(number_pdf.pages[0])
-        
         writer.add_page(page)
         
     out = BytesIO()
@@ -198,9 +186,22 @@ def add_page_numbers_overlay(pdf_bytes):
     return out.getvalue()
 
 def display_pdf(pdf_bytes):
+    """
+    תצוגה מקדימה משופרת עם EMBED + לינק גיבוי
+    """
     base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
-    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600px"></iframe>'
+    
+    # שימוש ב-embed במקום iframe לפתרון המסך האפור
+    pdf_display = f'''
+    <div class="pdf-container">
+        <embed src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800px" type="application/pdf" />
+    </div>
+    '''
     st.markdown(pdf_display, unsafe_allow_html=True)
+    
+    # לינק חירום למקרה שהדפדפן עדיין חוסם
+    href = f'<a href="data:application/pdf;base64,{base64_pdf}" target="_blank" style="text-decoration:none; font-size:12px; color:#666;">⚠️ לא רואה את התצוגה? לחץ כאן לפתיחה בחלון חדש</a>'
+    st.markdown(href, unsafe_allow_html=True)
 
 # ==========================================
 # 3. ניהול מצב
@@ -212,16 +213,13 @@ if 'preview_pdf' not in st.session_state: st.session_state.preview_pdf = None
 # 4. ממשק משתמש
 # ==========================================
 
-# --- כותרת ופרטי לקוח ---
 c1, c2 = st.columns([2, 1])
 with c1:
     st.title("מערכת איחוד נספחים")
 with c2:
-    # שדות להרכבת שם הקובץ
     client_name = st.text_input("שם הלקוח", placeholder="ישראל ישראלי")
     doc_subject = st.text_input("נושא/סוג מסמך", placeholder="הסכם פונדקאות")
 
-# --- אזור עבודה ראשי ---
 col_edit, col_view = st.columns([1.2, 1])
 
 with col_edit:
@@ -247,7 +245,6 @@ with col_edit:
             st.session_state.preview_pdf = None
             st.rerun()
             
-        # טבלת עריכה
         del_idx, up_idx, down_idx = None, None, None
         for i, item in enumerate(st.session_state.files_db):
             with st.container():
@@ -282,70 +279,65 @@ with col_view:
         if st.button("👁️ צור טיוטה לבדיקה", type="primary", use_container_width=True):
             with st.spinner("מחשב עמודים, בונה תוכן עניינים וממספר..."):
                 
-                # 1. חישוב עמודים מקדים (כדי לדעת מה לכתוב בתוכן עניינים)
-                # נניח שה-TOC הוא עמוד אחד (לצורך פשטות, בגרסה מתקדמת נחשב אם הוא גולש)
+                # 1. חישוב מוקדם עבור תוכן עניינים
                 toc_pages_count = 1 
                 current_page = toc_pages_count + 1
                 
                 toc_items = []
-                temp_writer = PdfWriter() # לאיסוף החומרים לפני מספור
+                temp_writer = PdfWriter()
                 
                 for idx, item in enumerate(st.session_state.files_db):
                     annex_num = idx + 1
                     
-                    # שמירת נתונים לטבלה
                     toc_items.append({
                         "number": annex_num,
                         "title": item['title'],
-                        "page": current_page # העמוד שבו מתחיל השער של הנספח
+                        "page": current_page
                     })
                     
-                    # יצירת שער
+                    # שער
                     cover_bytes = html_to_pdf_bytes(generate_html_cover(annex_num, item['title'], current_page))
                     if cover_bytes:
                         c_r = PdfReader(BytesIO(cover_bytes))
                         for p in c_r.pages: temp_writer.add_page(p)
                         current_page += len(c_r.pages)
                     
-                    # יצירת מסמך
+                    # מסמך
                     d_r = PdfReader(BytesIO(item['bytes']))
                     for p in d_r.pages: temp_writer.add_page(p)
                     current_page += len(d_r.pages)
                 
-                # 2. יצירת קובץ TOC סופי
+                # 2. יצירת TOC
                 toc_bytes = html_to_pdf_bytes(generate_toc_html(toc_items))
                 
-                # 3. איחוד הכל (TOC + שאר המסמכים)
+                # 3. איחוד ראשוני
                 final_pre_numbering = PdfWriter()
                 
-                # הוספת TOC
                 if toc_bytes:
                     t_r = PdfReader(BytesIO(toc_bytes))
                     for p in t_r.pages: final_pre_numbering.add_page(p)
                 
-                # הוספת כל השאר (שכבר אספנו ב-temp_writer)
-                # נצטרך לייצא ולייבא כדי להעביר
                 temp_io = BytesIO()
                 temp_writer.write(temp_io)
                 temp_io.seek(0)
                 temp_reader = PdfReader(temp_io)
                 for p in temp_reader.pages: final_pre_numbering.add_page(p)
                 
-                # שמירה לזיכרון לפני מספור
                 merged_io = BytesIO()
                 final_pre_numbering.write(merged_io)
                 
-                # 4. מספור רציף (STAMPING)
+                # 4. מספור חכם (Dynamic Overlay)
                 numbered_pdf = add_page_numbers_overlay(merged_io.getvalue())
                 
                 st.session_state.preview_pdf = numbered_pdf
                 st.rerun()
 
     if st.session_state.preview_pdf:
-        st.success("הקובץ מוכן!")
+        st.success("הטיוטה מוכנה!")
+        
+        # תצוגה משופרת
         display_pdf(st.session_state.preview_pdf)
         
-        # חישוב שם הקובץ
         safe_client = client_name.strip().replace(" ", "_") if client_name else "לקוח"
         safe_subject = doc_subject.strip().replace(" ", "_") if doc_subject else "מסמכים"
         final_filename = f"{safe_client}-{safe_subject}.pdf"
