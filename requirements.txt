@@ -1,0 +1,5 @@
+streamlit
+pypdf>=4,<6
+reportlab>=3.6
+Pillow<12
+tqdm
