@@ -1,5 +1,5 @@
 import streamlit as st
-import re
+import pandas as pd
 from io import BytesIO
 from pathlib import Path
 import subprocess
@@ -10,93 +10,55 @@ from pypdf import PdfReader, PdfWriter
 # 1. הגדרות עיצוב ו-UX (Law Firm Style)
 # ==========================================
 st.set_page_config(
-    page_title="מערכת איחוד נספחים | ברק עו\"ד",
+    page_title="Law-Gic 2.0 | מערכת נספחים",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# הזרקת CSS לעיצוב יוקרתי (Navy Blue & Gold)
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;700&display=swap');
     
-    /* הגדרות כלליות */
     html, body, [class*="css"] {
         font-family: 'Heebo', sans-serif;
         direction: rtl;
     }
     
-    /* כותרות בכחול נייבי */
-    h1, h2, h3 {
-        color: #1a2a40; 
-        font-weight: 700;
-        text-align: right;
-    }
+    h1, h2, h3 { color: #1a2a40; font-weight: 700; text-align: right; }
     
-    /* אזור הגרירה */
+    /* אזור גרירה מעוצב */
     .stFileUploader {
-        border: 2px dashed #c5a065; /* Gold border */
+        border: 2px dashed #c5a065;
         background-color: #f9fbfd;
         padding: 20px;
-        border-radius: 10px;
+        border-radius: 8px;
+    }
+
+    /* כרטיסיית קובץ (כמו בלוג'יק - שורה נקייה) */
+    .file-row {
+        background-color: white;
+        border-bottom: 1px solid #eee;
+        padding: 10px 0;
     }
     
-    /* כפתורים ראשיים (Gold) */
+    /* כפתורים */
     div.stButton > button:first-child {
-        background-color: #c5a065;
-        color: white;
-        border: none;
-        font-size: 18px;
-        font-weight: bold;
-        padding: 10px 24px;
-        border-radius: 5px;
-        transition: 0.3s;
-        width: 100%;
-    }
-    div.stButton > button:first-child:hover {
-        background-color: #b08d55;
-        border-color: #b08d55;
-    }
-
-    /* כפתורי משנה (אפור עדין) */
-    div[data-testid="column"] button {
-        background-color: #f1f5f9;
-        color: #1a2a40;
-        border: 1px solid #e2e8f0;
-    }
-
-    /* כרטיסיות קבצים */
-    .file-card {
-        background-color: white;
-        border-right: 4px solid #1a2a40;
-        padding: 15px;
-        margin-bottom: 10px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
         border-radius: 4px;
+    }
+    
+    /* כפתור הפקה ראשי */
+    .primary-btn button {
+        background-color: #1a2a40 !important;
+        color: white !important;
+        font-size: 20px !important;
+        padding: 15px 30px !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. פונקציות ליבה (המנוע)
+# 2. פונקציות ליבה
 # ==========================================
-
-def parse_filename_smart(filename):
-    """מנתח את שם הקובץ ומנסה לחלץ תובנות בצורה חכמה"""
-    stem = Path(filename).stem
-    # נסיון לזהות מבנה: 01_שם_מסמך
-    m = re.match(r'^(\d+)[\s_\-]*([^_\-\s]+)[\s_\-]*(.+)$', stem)
-    if m:
-        return m.group(1), m.group(2), m.group(3).strip() or stem
-    
-    # נסיון לזהות: הסכם_ממון_נספח_5
-    m2 = re.search(r'נספח[\s_\-]*(\d+|\w+)$', stem, re.IGNORECASE)
-    if m2:
-        identifier = m2.group(1)
-        client_name = re.sub(r'[\s_\-]*נספח[\s_\-]*(\d+|\w+)$', '', stem, flags=re.IGNORECASE).strip(' _-') or stem
-        return identifier if identifier.isdigit() else '—', identifier if not identifier.isdigit() else '—', client_name
-    
-    return '', '', stem
 
 def count_pdf_pages(file_bytes):
     try:
@@ -106,22 +68,23 @@ def count_pdf_pages(file_bytes):
         return 0
 
 def generate_html_cover(number, title, page_num):
-    # עיצוב דף שער נקי ורשמי ל-PDF
     return f"""
     <!DOCTYPE html>
     <html dir="rtl">
     <head>
         <meta charset="UTF-8">
         <style>
-            body {{ font-family: 'DejaVu Sans', sans-serif; text-align: center; padding-top: 300px; }}
-            .title {{ font-size: 60px; font-weight: bold; margin-bottom: 40px; }}
-            .subtitle {{ font-size: 40px; margin-bottom: 60px; }}
-            .footer {{ font-size: 24px; color: #666; margin-top: 100px; }}
+            body {{ font-family: 'DejaVu Sans', sans-serif; text-align: center; padding-top: 250px; }}
+            .header {{ font-size: 24px; color: #555; margin-bottom: 20px; }}
+            .number {{ font-size: 80px; font-weight: bold; color: #000; margin-bottom: 30px; }}
+            .title {{ font-size: 45px; margin-bottom: 50px; font-weight: normal; }}
+            .footer {{ font-size: 18px; color: #888; margin-top: 100px; border-top: 1px solid #ddd; display: inline-block; padding-top: 10px; }}
         </style>
     </head>
     <body>
-        <div class="title">נספח {number}</div>
-        <div class="subtitle">{title}</div>
+        <div class="header">נספח מס'</div>
+        <div class="number">{number}</div>
+        <div class="title">{title}</div>
         <div class="footer">עמוד {page_num}</div>
     </body>
     </html>
@@ -144,164 +107,165 @@ def html_to_pdf_bytes(html_content):
         with open(temp_pdf, 'rb') as f:
             pdf_bytes = f.read()
         return pdf_bytes
-    except Exception as e:
+    except Exception:
         return None
 
 # ==========================================
-# 3. ממשק משתמש (UI Layout)
+# 3. ניהול מצב (State)
 # ==========================================
-
-# כותרת עליונה
-c1, c2 = st.columns([3, 1])
-with c1:
-    st.title("מערכת איחוד נספחים")
-    st.caption("ברק - משרד עורכי דין | Powered by Gemini Logic")
-
-# ניהול State (זיכרון זמני של המערכת)
 if 'files_db' not in st.session_state:
     st.session_state.files_db = []
 
-# --- אזור ייבוא קבצים ---
-st.markdown("### 1. בחירת מסמכים לתיק")
-uploaded_files = st.file_uploader(
-    "גרור לכאן את קבצי התיק (PDF בלבד)", 
-    type=['pdf'], 
-    accept_multiple_files=True
-)
+# ==========================================
+# 4. ממשק משתמש (UI)
+# ==========================================
+
+c_logo, c_title = st.columns([1, 6])
+with c_title:
+    st.title("מערכת עריכת נספחים")
+    st.caption("הוסף קבצים -> סדר -> תן שמות -> הפק")
+
+# --- שלב 1: העלאה ---
+uploaded_files = st.file_uploader("גרור לכאן קבצים (אפשר לגרור הכל ביחד)", type=['pdf'], accept_multiple_files=True)
 
 if uploaded_files:
-    # לוגיקה שמונעת כפילויות ומוסיפה רק קבצים חדשים
-    current_names = [f['filename'] for f in st.session_state.files_db]
-    for uploaded_file in uploaded_files:
-        if uploaded_file.name not in current_names:
-            # כאן נכנסת ה"בינה" של זיהוי השמות
-            file_bytes = uploaded_file.read()
-            num, annex, title = parse_filename_smart(uploaded_file.name)
+    # בדיקה אם יש קבצים חדשים להוספה
+    existing_names = {f['id'] for f in st.session_state.files_db}
+    
+    for f in uploaded_files:
+        # מזהה ייחודי לקובץ כדי למנוע כפילויות בהעלאה
+        file_id = f.name + str(f.size)
+        
+        if file_id not in existing_names:
+            file_bytes = f.read()
             pages = count_pdf_pages(file_bytes)
             
-            # אם לא זוהה מספר, נותנים מספר רץ
-            if not num:
-                num = str(len(st.session_state.files_db) + 1)
+            # ברירת מחדל לכותרת: שם הקובץ ללא הסיומת (נקי מ- underscores)
+            default_title = Path(f.name).stem.replace("_", " ").replace("-", " ")
             
             st.session_state.files_db.append({
-                "filename": uploaded_file.name,
+                "id": file_id,
+                "filename": f.name,
                 "bytes": file_bytes,
-                "number": num,
-                "title": title,
-                "pages": pages
+                "title": default_title, # ברירת מחדל הניתנת לעריכה
+                "pages": pages,
+                "include": True
             })
-    
-    # אם העלו קבצים, נקה את ה-Uploader כדי שיהיה נקי לנגלה הבאה
-    # (דורש טריק קטן, כרגע נשאיר פשוט)
 
-# --- אזור עריכה וסידור ---
+# --- שלב 2: הטבלה החכמה (הלב של המערכת) ---
 if st.session_state.files_db:
-    st.markdown("---")
-    st.markdown("### 2. עריכה וסידור הנספחים")
+    st.divider()
     
-    col_header_1, col_header_2, col_header_3, col_header_4 = st.columns([1, 4, 2, 1])
-    col_header_1.markdown("**סדר**")
-    col_header_2.markdown("**פרטי המסמך**")
-    col_header_3.markdown("**מספר וכותרת נספח**")
-    col_header_4.markdown("**עמודים**")
+    # כותרות הטבלה
+    h1, h2, h3, h4, h5 = st.columns([0.5, 0.5, 3, 1, 0.5])
+    h1.markdown("👆👇")
+    h2.markdown("**מס'**")
+    h3.markdown("**שם הנספח (לעריכה)**")
+    h4.markdown("**קובץ מקור**")
+    h5.markdown("**עמ'**")
+    
+    # משתנים למחיקה/שינוי סדר
+    move_up_idx = None
+    move_down_idx = None
+    delete_idx = None
 
-    files_to_remove = []
-    
-    for i, file_data in enumerate(st.session_state.files_db):
-        # עיצוב של "שורת טבלה"
+    # לולאה שמציגה את השורות
+    for i, item in enumerate(st.session_state.files_db):
+        # חישוב מספר נספח אוטומטי לפי המיקום ברשימה (1-based index)
+        annex_number = i + 1
+        
         with st.container():
-            c_move, c_info, c_edit, c_meta = st.columns([1, 4, 2, 1])
+            c1, c2, c3, c4, c5 = st.columns([0.5, 0.5, 3, 1, 0.5])
             
-            with c_move:
+            # עמודה 1: הזזה
+            with c1:
+                sub_c1, sub_c2 = st.columns(2)
                 if i > 0:
-                    if st.button("⬆️", key=f"up_{i}"):
-                        st.session_state.files_db[i], st.session_state.files_db[i-1] = st.session_state.files_db[i-1], st.session_state.files_db[i]
-                        st.rerun()
+                    if sub_c1.button("⬆️", key=f"up_{i}"): move_up_idx = i
                 if i < len(st.session_state.files_db) - 1:
-                    if st.button("⬇️", key=f"down_{i}"):
-                        st.session_state.files_db[i], st.session_state.files_db[i+1] = st.session_state.files_db[i+1], st.session_state.files_db[i]
-                        st.rerun()
+                    if sub_c2.button("⬇️", key=f"down_{i}"): move_down_idx = i
             
-            with c_info:
-                st.markdown(f"**קובץ:** `{file_data['filename']}`")
-                if st.button("🗑️ הסר", key=f"del_{i}"):
-                    files_to_remove.append(i)
-
-            with c_edit:
-                file_data['number'] = st.text_input("מספר נספח", file_data['number'], key=f"num_{i}", label_visibility="collapsed", placeholder="מספר")
-                file_data['title'] = st.text_input("כותרת נספח", file_data['title'], key=f"tit_{i}", label_visibility="collapsed", placeholder="כותרת המסמך")
-
-            with c_meta:
-                st.caption(f"{file_data['pages']} עמ'")
+            # עמודה 2: מספר נספח (אוטומטי!)
+            with c2:
+                st.markdown(f"<h3 style='margin:0; text-align:center;'>{annex_number}</h3>", unsafe_allow_html=True)
             
-            st.markdown("<hr style='margin: 5px 0; border-color: #eee;'>", unsafe_allow_html=True)
+            # עמודה 3: שם הנספח (שדה עריכה)
+            with c3:
+                item['title'] = st.text_input("שם", item['title'], key=f"title_input_{i}", label_visibility="collapsed")
+            
+            # עמודה 4: שם הקובץ המקורי (לקריאה בלבד)
+            with c4:
+                st.caption(item['filename'])
+                
+            # עמודה 5: עמודים ומחיקה
+            with c5:
+                st.text(f"{item['pages']} עמ'")
+                if st.button("🗑️", key=f"del_{i}"): delete_idx = i
+                
+        st.markdown("<hr style='margin: 5px 0; border-color: #f0f0f0;'>", unsafe_allow_html=True)
 
-    # מחיקת מסמכים שסומנו
-    if files_to_remove:
-        for index in sorted(files_to_remove, reverse=True):
-            del st.session_state.files_db[index]
+    # ביצוע פעולות הזזה/מחיקה מחוץ ללולאה
+    if move_up_idx is not None:
+        st.session_state.files_db[move_up_idx], st.session_state.files_db[move_up_idx-1] = st.session_state.files_db[move_up_idx-1], st.session_state.files_db[move_up_idx]
+        st.rerun()
+    
+    if move_down_idx is not None:
+        st.session_state.files_db[move_down_idx], st.session_state.files_db[move_down_idx+1] = st.session_state.files_db[move_down_idx+1], st.session_state.files_db[move_down_idx]
+        st.rerun()
+        
+    if delete_idx is not None:
+        del st.session_state.files_db[delete_idx]
         st.rerun()
 
-    # --- כפתור הפעולה ---
+    # --- שלב 3: כפתור הפקה ---
     st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("הפק קלסר נספחים מאוחד (PDF) ⚖️"):
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        writer = PdfWriter()
-        current_page_num = 1
-        total_files = len(st.session_state.files_db)
-        
-        # יצירת תוכן עניינים (נכין את הנתונים)
-        toc_data = []
-        
-        try:
-            for idx, item in enumerate(st.session_state.files_db):
-                status_text.text(f"מעבד נספח {item['number']}: {item['title']}...")
-                progress_bar.progress(int((idx / total_files) * 90))
-                
-                # שמירת נתונים לתוכן העניינים
-                toc_data.append({
-                    "number": item['number'],
-                    "title": item['title'],
-                    "page": current_page_num
-                })
-                
-                # 1. יצירת שער
-                cover_bytes = html_to_pdf_bytes(generate_html_cover(item['number'], item['title'], current_page_num))
-                if cover_bytes:
-                    cover_reader = PdfReader(BytesIO(cover_bytes))
-                    for p in cover_reader.pages:
-                        writer.add_page(p)
-                    current_page_num += len(cover_reader.pages)
-                
-                # 2. הוספת המסמך המקורי
-                doc_reader = PdfReader(BytesIO(item['bytes']))
-                for p in doc_reader.pages:
-                    writer.add_page(p)
-                current_page_num += len(doc_reader.pages)
+    c_generate = st.container()
+    
+    if c_generate.button("🚀 הפק קלסר מוכן להגשה", type="primary", use_container_width=True):
+        if not st.session_state.files_db:
+            st.error("אין קבצים להפקה")
+        else:
+            progress_bar = st.progress(0)
+            status = st.empty()
+            writer = PdfWriter()
+            current_page = 1
+            
+            total = len(st.session_state.files_db)
+            
+            try:
+                for idx, item in enumerate(st.session_state.files_db):
+                    annex_num = idx + 1
+                    status.text(f"מעבד נספח {annex_num}: {item['title']}...")
+                    
+                    # יצירת שער
+                    cover_pdf = html_to_pdf_bytes(generate_html_cover(annex_num, item['title'], current_page))
+                    if cover_pdf:
+                        cover_reader = PdfReader(BytesIO(cover_pdf))
+                        for p in cover_reader.pages: writer.add_page(p)
+                        current_page += len(cover_reader.pages)
+                    
+                    # הוספת קובץ מקור
+                    doc_reader = PdfReader(BytesIO(item['bytes']))
+                    for p in doc_reader.pages: writer.add_page(p)
+                    current_page += len(doc_reader.pages)
+                    
+                    progress_bar.progress((idx + 1) / total)
 
-            status_text.text("מרכיב קובץ סופי...")
-            progress_bar.progress(100)
-            
-            # שמירה לזיכרון
-            output_pdf = BytesIO()
-            writer.write(output_pdf)
-            output_pdf_data = output_pdf.getvalue()
-
-            st.success("✅ הקלסר הופק בהצלחה!")
-            
-            # כפתור הורדה
-            st.download_button(
-                label="📥 לחץ כאן להורדת הקלסר המוכן",
-                data=output_pdf_data,
-                file_name="קלסר_נספחים_מאוחד.pdf",
-                mime="application/pdf"
-            )
-            
-        except Exception as e:
-            st.error(f"אירעה שגיאה בתהליך: {str(e)}")
+                # שמירה
+                out = BytesIO()
+                writer.write(out)
+                
+                status.success("הקובץ מוכן! 🎉")
+                st.download_button(
+                    label="📥 הורד קלסר מאוחד (PDF)",
+                    data=out.getvalue(),
+                    file_name="נספחים_מאוחד.pdf",
+                    mime="application/pdf",
+                    type="primary"
+                )
+                
+            except Exception as e:
+                st.error(f"שגיאה: {e}")
 
 else:
-    # הודעה כשהרשימה ריקה
-    st.info("👋 ברוכים הבאים. כדי להתחיל, גרור קבצים לתיבה למעלה.")
+    st.info("👋 המערכת מוכנה. גרור קבצים כדי להתחיל בעבודה.")
