@@ -2,13 +2,14 @@ import streamlit as st
 from io import BytesIO
 from pathlib import Path
 import subprocess
+import os
 from tempfile import NamedTemporaryFile
 from pypdf import PdfReader, PdfWriter
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
 
 # ==========================================
-# 1. הגדרות עיצוב (נקי ומקצועי)
+# 1. הגדרות עיצוב
 # ==========================================
 st.set_page_config(
     page_title="Law-Gic Pro | מערכת נספחים",
@@ -27,16 +28,14 @@ st.markdown("""
     
     h1, h2, h3 { color: #1a2a40; font-weight: 700; text-align: right; }
     
-    /* אזור גרירה */
     .stFileUploader {
         border: 2px dashed #c5a065;
         background-color: #fbfbfb;
         padding: 20px; border-radius: 8px;
     }
     
-    /* כפתור עיבוד */
     .primary-action button {
-        background-color: #1a2a40 !important; /* כחול כהה */
+        background-color: #1a2a40 !important;
         color: white !important;
         font-size: 20px !important;
         padding: 12px 0 !important;
@@ -48,7 +47,6 @@ st.markdown("""
         background-color: #2c4563 !important;
     }
     
-    /* כפתור הורדה סופי (זהב) */
     .final-download button {
         background-color: #c5a065 !important;
         color: white !important;
@@ -65,7 +63,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. פונקציות ליבה (אותו מנוע חכם)
+# 2. פונקציות ליבה
 # ==========================================
 
 def count_pdf_pages(file_bytes):
@@ -104,7 +102,6 @@ def generate_toc_html(items):
             <td style="text-align: center; font-weight: bold;">נספח {item['number']}</td>
         </tr>
         """
-    
     return f"""
     <!DOCTYPE html>
     <html dir="rtl">
@@ -159,7 +156,9 @@ def html_to_pdf_bytes(html_content):
         return None
 
 def add_page_numbers_overlay(pdf_bytes):
-    """מספור חכם (דינמי לרוחב/אורך)"""
+    """
+    מספור חכם שמתחשב ב-Rotation Flag של ה-PDF
+    """
     reader = PdfReader(BytesIO(pdf_bytes))
     writer = PdfWriter()
     total_pages = len(reader.pages)
@@ -168,15 +167,51 @@ def add_page_numbers_overlay(pdf_bytes):
         page = reader.pages[i]
         page_num = i + 1
         
-        # זיהוי מידות
-        page_width = float(page.mediabox.width)
-        page_height = float(page.mediabox.height)
+        # 1. שליפת נתונים גולמיים
+        w = float(page.mediabox.width)
+        h = float(page.mediabox.height)
+        # בדיקת סיבוב (0, 90, 180, 270)
+        rot = int(page.get('/Rotate', 0) or 0) % 360
         
-        # יצירת מספור
+        # 2. יצירת קנבס בגודל המקורי
         packet = BytesIO()
-        can = canvas.Canvas(packet, pagesize=(page_width, page_height))
+        can = canvas.Canvas(packet, pagesize=(w, h))
         can.setFont("Helvetica", 12)
-        can.drawCentredString(page_width / 2.0, 10 * mm, str(page_num))
+        
+        # 3. חישוב מיקום המספר לפי הסיבוב
+        # המטרה: שהמספר תמיד יופיע ב"למטה" הוויזואלי של הדף
+        
+        if rot == 0:
+            # דף רגיל (או שוכב אמיתי ללא דגל סיבוב)
+            can.drawCentredString(w / 2.0, 10 * mm, str(page_num))
+            
+        elif rot == 90:
+            # דף מסובב ימינה (כמו דפי בנק)
+            # ה"למטה" הוויזואלי הוא צד ימין של הקואורדינטות
+            can.saveState()
+            # מזיזים את הראשית לאמצע הגובה, בצד ימין
+            can.translate(w - 10 * mm, h / 2.0)
+            # מסובבים את הטקסט ב-90 מעלות
+            can.rotate(90)
+            can.drawCentredString(0, 0, str(page_num))
+            can.restoreState()
+            
+        elif rot == 180:
+            # דף הפוך
+            can.saveState()
+            can.translate(w / 2.0, h - 10 * mm)
+            can.rotate(180)
+            can.drawCentredString(0, 0, str(page_num))
+            can.restoreState()
+            
+        elif rot == 270:
+            # דף מסובב שמאלה
+            can.saveState()
+            can.translate(10 * mm, h / 2.0)
+            can.rotate(270)
+            can.drawCentredString(0, 0, str(page_num))
+            can.restoreState()
+            
         can.save()
         packet.seek(0)
         
@@ -189,11 +224,43 @@ def add_page_numbers_overlay(pdf_bytes):
     writer.write(out)
     return out.getvalue()
 
+def compress_pdf(input_bytes):
+    """דחיסה אוטומטית עם Ghostscript אם הקובץ כבד"""
+    try:
+        with NamedTemporaryFile(suffix='.pdf', delete=False) as f_in:
+            f_in.write(input_bytes)
+            input_path = f_in.name
+            
+        output_path = input_path.replace('.pdf', '_compressed.pdf')
+        
+        gs_cmd = [
+            "gs", "-sDEVICE=pdfwrite", "-dCompatibilityLevel=1.4",
+            "-dPDFSETTINGS=/ebook", 
+            "-dNOPAUSE", "-dQUIET", "-dBATCH",
+            f"-sOutputFile={output_path}", input_path
+        ]
+        
+        subprocess.run(gs_cmd, check=True)
+        
+        with open(output_path, 'rb') as f_out:
+            compressed_bytes = f_out.read()
+            
+        try:
+            os.remove(input_path)
+            os.remove(output_path)
+        except: pass
+        
+        return compressed_bytes
+    except Exception as e:
+        print(f"Compression failed: {e}")
+        return input_bytes
+
 # ==========================================
 # 3. ניהול מצב
 # ==========================================
 if 'files_db' not in st.session_state: st.session_state.files_db = []
 if 'final_pdf_bytes' not in st.session_state: st.session_state.final_pdf_bytes = None 
+if 'file_size_mb' not in st.session_state: st.session_state.file_size_mb = 0
 
 # ==========================================
 # 4. ממשק משתמש
@@ -209,7 +276,7 @@ with c2:
 col_edit, col_action = st.columns([1.5, 1])
 
 with col_edit:
-    st.subheader("1. קבצים")
+    st.subheader("1. העלאה וסידור")
     uploaded = st.file_uploader("גרור קבצים לכאן", type=['pdf'], accept_multiple_files=True, label_visibility="collapsed")
     
     if uploaded:
@@ -257,17 +324,13 @@ with col_edit:
             st.rerun()
 
 with col_action:
-    st.subheader("2. פעולות")
+    st.subheader("2. הפקה")
     
     if st.session_state.files_db:
-        # כפתור עיבוד (הפקת הקובץ לזיכרון)
         st.markdown('<div class="primary-action">', unsafe_allow_html=True)
-        
-        # אם הקובץ עוד לא מוכן, או שהמשתמש שינה משהו - מציגים כפתור עיבוד
         if st.session_state.final_pdf_bytes is None:
             if st.button("⚙️ הכן קובץ להורדה", use_container_width=True):
-                with st.spinner("מעבד... (בונה שערים, תוכן עניינים וממספר)"):
-                    # לוגיקת יצירה
+                with st.spinner("מעבד..."):
                     toc_pages_count = 1 
                     current_page = toc_pages_count + 1
                     toc_items = []
@@ -302,21 +365,32 @@ with col_action:
                     merged_io = BytesIO()
                     final_pre.write(merged_io)
                     
-                    # מספור
-                    st.session_state.final_pdf_bytes = add_page_numbers_overlay(merged_io.getvalue())
+                    # שלב 2: מספור חכם (עם התיקון לסיבוב)
+                    numbered_bytes = add_page_numbers_overlay(merged_io.getvalue())
+                    
+                    # שלב 3: בדיקת משקל ודחיסה
+                    size_in_mb = len(numbered_bytes) / (1024 * 1024)
+                    st.session_state.file_size_mb = size_in_mb
+                    
+                    if size_in_mb > 25:
+                         with st.spinner(f"הקובץ גדול ({size_in_mb:.1f}MB). מכווץ אוטומטית למייל..."):
+                             numbered_bytes = compress_pdf(numbered_bytes)
+                             new_size = len(numbered_bytes) / (1024 * 1024)
+                             st.session_state.file_size_mb = new_size
+                             st.toast(f"הקובץ כווץ בהצלחה ל-{new_size:.1f}MB", icon="📉")
+
+                    st.session_state.final_pdf_bytes = numbered_bytes
                     st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # הצגת כפתור הורדה ענק וזהוב אם הקובץ מוכן
     if st.session_state.final_pdf_bytes:
-        # חישוב שם קובץ
         safe_client = client_name.strip().replace(" ", "_") if client_name else "לקוח"
         safe_subject = doc_subject.strip().replace(" ", "_") if doc_subject else "מסמכים"
         final_name = f"{safe_client}-{safe_subject}.pdf"
         
         st.markdown(f"""
         <div style="text-align:center; margin-bottom:10px; color:#234e52; background:#e6fffa; padding:10px; border-radius:5px;">
-            ✅ הקובץ מוכן!
+            ✅ הקובץ מוכן! ({st.session_state.file_size_mb:.1f} MB)
         </div>
         """, unsafe_allow_html=True)
         
@@ -330,7 +404,6 @@ with col_action:
         )
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # כפתור לאיפוס כדי להתחיל מחדש אם רוצים
         if st.button("בצע שינויים נוספים"):
             st.session_state.final_pdf_bytes = None
             st.rerun()
