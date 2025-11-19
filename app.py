@@ -35,19 +35,32 @@ st.markdown("""
         padding: 20px; border-radius: 8px;
     }
     
-    /* כפתור הורדה */
-    div.stDownloadButton > button {
-        background-color: #1a2a40;
-        color: white;
+    /* כפתור פעולה ראשי */
+    .primary-action button {
+        background-color: #c5a065 !important;
+        color: white !important;
+        font-size: 20px !important;
+        padding: 10px 30px !important;
+        border: none;
         width: 100%;
-        padding: 15px;
-        font-size: 18px;
     }
     
-    /* מסגרת לתצוגה מקדימה */
-    .pdf-container {
-        border: 1px solid #ddd;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    /* כפתורי הורדה */
+    .download-btn button {
+        width: 100%;
+        border-radius: 5px;
+        font-weight: bold;
+        padding: 15px;
+    }
+    
+    .success-box {
+        padding: 20px;
+        background-color: #e6fffa;
+        border: 1px solid #38b2ac;
+        border-radius: 8px;
+        color: #234e52;
+        text-align: center;
+        margin-bottom: 20px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -148,7 +161,7 @@ def html_to_pdf_bytes(html_content):
 
 def add_page_numbers_overlay(pdf_bytes):
     """
-    מוסיף מספור דינמי - מזהה אם הדף לרוחב או לאורך וממקם בהתאם.
+    מספור חכם: בודק את גודל הדף (רוחב/גובה) וממקם את המספר תמיד למטה במרכז.
     """
     reader = PdfReader(BytesIO(pdf_bytes))
     writer = PdfWriter()
@@ -159,24 +172,22 @@ def add_page_numbers_overlay(pdf_bytes):
         page = reader.pages[i]
         page_num = i + 1
         
-        # 1. זיהוי מידות הדף הנוכחי (חשוב לדפי בנק לרוחב!)
-        # Mediabox נותן את [x, y, width, height]
+        # זיהוי מידות הדף הנוכחי
         page_width = float(page.mediabox.width)
         page_height = float(page.mediabox.height)
         
-        # 2. יצירת קנבס בדיוק במידות של הדף הזה
+        # יצירת קנבס בגודל הדף הספציפי הזה
         packet = BytesIO()
         can = canvas.Canvas(packet, pagesize=(page_width, page_height))
         can.setFont("Helvetica", 12)
         
-        # 3. ציור המספר: תמיד באמצע הרוחב, ותמיד 10 מ"מ מלמטה
-        # זה עובד גם אם הדף לרוחב וגם אם לאורך, כי אנחנו לוקחים את ה-width הספציפי שלו
+        # ציור המספר: תמיד באמצע הרוחב, 10 מ"מ מלמטה
         can.drawCentredString(page_width / 2.0, 10 * mm, str(page_num))
         
         can.save()
         packet.seek(0)
         
-        # 4. מיזוג
+        # מיזוג
         number_pdf = PdfReader(packet)
         page.merge_page(number_pdf.pages[0])
         writer.add_page(page)
@@ -185,29 +196,12 @@ def add_page_numbers_overlay(pdf_bytes):
     writer.write(out)
     return out.getvalue()
 
-def display_pdf(pdf_bytes):
-    """
-    תצוגה מקדימה משופרת עם EMBED + לינק גיבוי
-    """
-    base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
-    
-    # שימוש ב-embed במקום iframe לפתרון המסך האפור
-    pdf_display = f'''
-    <div class="pdf-container">
-        <embed src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800px" type="application/pdf" />
-    </div>
-    '''
-    st.markdown(pdf_display, unsafe_allow_html=True)
-    
-    # לינק חירום למקרה שהדפדפן עדיין חוסם
-    href = f'<a href="data:application/pdf;base64,{base64_pdf}" target="_blank" style="text-decoration:none; font-size:12px; color:#666;">⚠️ לא רואה את התצוגה? לחץ כאן לפתיחה בחלון חדש</a>'
-    st.markdown(href, unsafe_allow_html=True)
-
 # ==========================================
 # 3. ניהול מצב
 # ==========================================
 if 'files_db' not in st.session_state: st.session_state.files_db = []
-if 'preview_pdf' not in st.session_state: st.session_state.preview_pdf = None
+# כאן נשמור את הקובץ המוכן כדי לא לחשב אותו פעמיים
+if 'final_pdf_bytes' not in st.session_state: st.session_state.final_pdf_bytes = None 
 
 # ==========================================
 # 4. ממשק משתמש
@@ -220,7 +214,8 @@ with c2:
     client_name = st.text_input("שם הלקוח", placeholder="ישראל ישראלי")
     doc_subject = st.text_input("נושא/סוג מסמך", placeholder="הסכם פונדקאות")
 
-col_edit, col_view = st.columns([1.2, 1])
+# חלוקה ל-2 עמודות: עריכה (ימין) ופעולות (שמאל)
+col_edit, col_action = st.columns([1.5, 1])
 
 with col_edit:
     st.subheader("1. העלאה וסידור")
@@ -237,12 +232,14 @@ with col_edit:
                     "id": fid, "filename": f.name, "bytes": fb, 
                     "title": title, "pages": count_pdf_pages(fb)
                 })
-                st.session_state.preview_pdf = None
+                # אם משנים משהו, צריך לאפס את הקובץ המוכן
+                st.session_state.final_pdf_bytes = None
 
     if st.session_state.files_db:
+        # כפתור ניקוי
         if st.button("נקה הכל"):
             st.session_state.files_db = []
-            st.session_state.preview_pdf = None
+            st.session_state.final_pdf_bytes = None
             st.rerun()
             
         del_idx, up_idx, down_idx = None, None, None
@@ -260,92 +257,97 @@ with col_edit:
                     if st.button("🗑️", key=f"x{i}"): del_idx = i
                 st.divider()
         
-        if up_idx is not None:
-            st.session_state.files_db[up_idx], st.session_state.files_db[up_idx-1] = st.session_state.files_db[up_idx-1], st.session_state.files_db[up_idx]
-            st.session_state.preview_pdf = None
-            st.rerun()
-        if down_idx is not None:
-            st.session_state.files_db[down_idx], st.session_state.files_db[down_idx+1] = st.session_state.files_db[down_idx+1], st.session_state.files_db[down_idx]
-            st.session_state.preview_pdf = None
-            st.rerun()
-        if del_idx is not None:
-            del st.session_state.files_db[del_idx]
-            st.session_state.preview_pdf = None
+        # ביצוע שינויים
+        if any(x is not None for x in [up_idx, down_idx, del_idx]):
+            if up_idx is not None:
+                st.session_state.files_db[up_idx], st.session_state.files_db[up_idx-1] = st.session_state.files_db[up_idx-1], st.session_state.files_db[up_idx]
+            elif down_idx is not None:
+                st.session_state.files_db[down_idx], st.session_state.files_db[down_idx+1] = st.session_state.files_db[down_idx+1], st.session_state.files_db[down_idx]
+            elif del_idx is not None:
+                del st.session_state.files_db[del_idx]
+            
+            st.session_state.final_pdf_bytes = None
             st.rerun()
 
-with col_view:
-    st.subheader("2. תצוגה והפקה")
+with col_action:
+    st.subheader("2. הפקה")
+    st.info("התהליך יוצר טיוטה להורדה. בדוק אותה בדפדפן, ואז הורד את הקובץ הסופי.")
+    
     if st.session_state.files_db:
-        if st.button("👁️ צור טיוטה לבדיקה", type="primary", use_container_width=True):
-            with st.spinner("מחשב עמודים, בונה תוכן עניינים וממספר..."):
-                
-                # 1. חישוב מוקדם עבור תוכן עניינים
+        # כפתור עיבוד ראשי
+        st.markdown('<div class="primary-action">', unsafe_allow_html=True)
+        if st.button("⚙️ הכן קובץ (עיבוד)", use_container_width=True):
+            with st.spinner("ממזג קבצים, יוצר שערים וממספר..."):
+                # לוגיקת יצירת PDF (זהה לקודם)
                 toc_pages_count = 1 
                 current_page = toc_pages_count + 1
-                
                 toc_items = []
                 temp_writer = PdfWriter()
                 
                 for idx, item in enumerate(st.session_state.files_db):
                     annex_num = idx + 1
+                    toc_items.append({"number": annex_num, "title": item['title'], "page": current_page})
                     
-                    toc_items.append({
-                        "number": annex_num,
-                        "title": item['title'],
-                        "page": current_page
-                    })
-                    
-                    # שער
                     cover_bytes = html_to_pdf_bytes(generate_html_cover(annex_num, item['title'], current_page))
                     if cover_bytes:
                         c_r = PdfReader(BytesIO(cover_bytes))
                         for p in c_r.pages: temp_writer.add_page(p)
                         current_page += len(c_r.pages)
                     
-                    # מסמך
                     d_r = PdfReader(BytesIO(item['bytes']))
                     for p in d_r.pages: temp_writer.add_page(p)
                     current_page += len(d_r.pages)
                 
-                # 2. יצירת TOC
                 toc_bytes = html_to_pdf_bytes(generate_toc_html(toc_items))
-                
-                # 3. איחוד ראשוני
-                final_pre_numbering = PdfWriter()
-                
+                final_pre = PdfWriter()
                 if toc_bytes:
                     t_r = PdfReader(BytesIO(toc_bytes))
-                    for p in t_r.pages: final_pre_numbering.add_page(p)
+                    for p in t_r.pages: final_pre.add_page(p)
                 
                 temp_io = BytesIO()
                 temp_writer.write(temp_io)
                 temp_io.seek(0)
-                temp_reader = PdfReader(temp_io)
-                for p in temp_reader.pages: final_pre_numbering.add_page(p)
+                temp_r = PdfReader(temp_io)
+                for p in temp_r.pages: final_pre.add_page(p)
                 
                 merged_io = BytesIO()
-                final_pre_numbering.write(merged_io)
+                final_pre.write(merged_io)
                 
-                # 4. מספור חכם (Dynamic Overlay)
-                numbered_pdf = add_page_numbers_overlay(merged_io.getvalue())
-                
-                st.session_state.preview_pdf = numbered_pdf
+                # מספור
+                st.session_state.final_pdf_bytes = add_page_numbers_overlay(merged_io.getvalue())
                 st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    if st.session_state.preview_pdf:
-        st.success("הטיוטה מוכנה!")
+    # הצגת כפתורי הורדה אם הקובץ מוכן
+    if st.session_state.final_pdf_bytes:
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class="success-box">
+            <b>הקובץ מוכן!</b> ({len(st.session_state.files_db)} נספחים)
+        </div>
+        """, unsafe_allow_html=True)
         
-        # תצוגה משופרת
-        display_pdf(st.session_state.preview_pdf)
-        
+        # חישוב שם קובץ סופי
         safe_client = client_name.strip().replace(" ", "_") if client_name else "לקוח"
         safe_subject = doc_subject.strip().replace(" ", "_") if doc_subject else "מסמכים"
-        final_filename = f"{safe_client}-{safe_subject}.pdf"
+        final_name = f"{safe_client}-{safe_subject}.pdf"
         
+        # כפתור 1: טיוטה
         st.download_button(
-            label=f"📥 הורד קובץ סופי: {final_filename}",
-            data=st.session_state.preview_pdf,
-            file_name=final_filename,
+            label="📄 לחץ להורדת טיוטה לבדיקה (draft.pdf)",
+            data=st.session_state.final_pdf_bytes,
+            file_name="draft_check.pdf",
+            mime="application/pdf",
+            use_container_width=True
+        )
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # כפתור 2: סופי
+        st.download_button(
+            label=f"💾 אשר והורד קובץ סופי ({final_name})",
+            data=st.session_state.final_pdf_bytes,
+            file_name=final_name,
             mime="application/pdf",
             type="primary",
             use_container_width=True
