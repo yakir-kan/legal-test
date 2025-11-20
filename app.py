@@ -19,114 +19,29 @@ st.set_page_config(page_title="Law-Gic Dashboard", layout="wide")
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700&display=swap');
-    
-    /* --- רקע כללי (אפור עדין כמו באפליקציות מודרניות) --- */
-    .stApp {
-        background-color: #f7f9fc;
-        font-family: 'Heebo', sans-serif;
-        direction: rtl;
-    }
-    
-    /* --- הסתרת אלמנטים מיותרים של סטרימליט --- */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-    
-    /* --- עיצוב כרטיסים (Cards) --- */
-    .css-card {
-        background-color: #ffffff;
-        border-radius: 16px;
-        padding: 24px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
-        border: 1px solid #eff2f5;
-        margin-bottom: 20px;
-    }
-    
-    /* --- כותרות --- */
+    .stApp { background-color: #f7f9fc; font-family: 'Heebo', sans-serif; direction: rtl; }
+    #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
+    .css-card { background-color: #ffffff; border-radius: 16px; padding: 24px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03); border: 1px solid #eff2f5; margin-bottom: 20px; }
     h1 { color: #1e293b; font-weight: 800; font-size: 28px; margin-bottom: 5px; }
-    h3 { color: #475569; font-weight: 600; font-size: 18px; margin-top: 0; }
-    p  { color: #64748b; font-size: 14px; }
-
-    /* --- כפתורים מותאמים אישית --- */
-    .stButton button {
-        border-radius: 10px;
-        font-weight: 600;
-        border: none;
-        transition: all 0.2s;
-    }
+    .stButton button { border-radius: 10px; font-weight: 600; border: none; transition: all 0.2s; }
+    .primary-action button { background-color: #10b981 !important; color: white !important; font-size: 18px !important; padding: 12px 24px !important; width: 100%; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); }
+    .primary-action button:hover { background-color: #059669 !important; transform: translateY(-2px); }
+    .fetch-btn button { background-color: #3b82f6 !important; color: white !important; width: 100%; }
+    .divider-btn button { background-color: #eff6ff !important; color: #1d4ed8 !important; border: 1px dashed #bfdbfe !important; width: 100%; }
+    .row-container { display: flex; align-items: center; background: white; border-radius: 8px; margin-bottom: 8px; padding: 10px; border: 1px solid #f1f5f9; }
+    .divider-row-style { border-right: 6px solid #3b82f6; background-color: #f8fafc; }
+    .file-row-style { border-right: 6px solid #cbd5e1; }
+    .status-badge { background-color: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+    .stTextInput input { border-radius: 8px; border: 1px solid #e2e8f0; padding: 10px; background-color: #f8fafc; }
+    .stTextInput input:focus { border-color: #3b82f6; background-color: white; }
     
-    /* כפתור פעולה ראשי (ירוק/כחול מודרני) */
-    .primary-action button {
-        background-color: #10b981 !important; /* ירוק מנטה */
-        color: white !important;
-        font-size: 18px !important;
-        padding: 12px 24px !important;
-        width: 100%;
-        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
-    }
-    .primary-action button:hover {
-        background-color: #059669 !important;
-        transform: translateY(-2px);
-    }
-
-    /* כפתור משיכה (כחול) */
-    .fetch-btn button {
-        background-color: #3b82f6 !important;
+    /* כפתור הורדה גיבוי */
+    .backup-download button {
+        background-color: #f59e0b !important;
         color: white !important;
         width: 100%;
+        margin-top: 10px;
     }
-
-    /* כפתור הוספת חוצץ (בהיר) */
-    .divider-btn button {
-        background-color: #eff6ff !important;
-        color: #1d4ed8 !important;
-        border: 1px dashed #bfdbfe !important;
-        width: 100%;
-    }
-
-    /* --- עיצוב שורות בטבלה --- */
-    .row-container {
-        display: flex;
-        align-items: center;
-        background: white;
-        border-radius: 8px;
-        margin-bottom: 8px;
-        padding: 10px;
-        border: 1px solid #f1f5f9;
-    }
-    
-    /* שורת חוצץ */
-    .divider-row-style {
-        border-right: 6px solid #3b82f6; /* פס כחול מימין */
-        background-color: #f8fafc;
-    }
-    
-    /* שורת קובץ */
-    .file-row-style {
-        border-right: 6px solid #cbd5e1; /* פס אפור מימין */
-    }
-    
-    .status-badge {
-        background-color: #dcfce7;
-        color: #166534;
-        padding: 2px 8px;
-        border-radius: 12px;
-        font-size: 12px;
-        font-weight: bold;
-    }
-
-    /* קלט טקסט */
-    .stTextInput input {
-        border-radius: 8px;
-        border: 1px solid #e2e8f0;
-        padding: 10px;
-        background-color: #f8fafc;
-    }
-    .stTextInput input:focus {
-        border-color: #3b82f6;
-        background-color: white;
-    }
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -138,7 +53,7 @@ if 'binder_files' not in st.session_state or not isinstance(st.session_state.bin
 if 'folder_id' not in st.session_state: st.session_state.folder_id = None
 
 # ==========================================
-# 3. מנועים (גוגל דרייב + PDF) - ללא שינוי
+# 3. מנועים (עם התיקונים למפתח)
 # ==========================================
 def get_drive_service():
     try:
@@ -146,7 +61,13 @@ def get_drive_service():
         creds_dict = json.loads(key_content, strict=False)
         creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=['https://www.googleapis.com/auth/drive'])
         return build('drive', 'v3', credentials=creds)
-    except: return None
+    except Exception as e:
+        try: # ניסיון שני לניקוי המפתח
+             key_content = st.secrets["gcp_key"].replace('\n', '\\n')
+             creds_dict = json.loads(key_content, strict=False)
+             creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=['https://www.googleapis.com/auth/drive'])
+             return build('drive', 'v3', credentials=creds)
+        except: return None
 
 def list_files_from_drive(folder_link):
     match = re.search(r'folders/([a-zA-Z0-9-_]+)', folder_link)
@@ -231,12 +152,9 @@ def compress_if_needed(pdf_bytes):
 # 4. מבנה הדאשבורד (LAYOUT)
 # ==========================================
 
-# כותרת עליונה מחוץ לכרטיסים
 st.markdown("<h1>מערכת ניהול ואיגוד נספחים</h1>", unsafe_allow_html=True)
 st.markdown("<p style='margin-bottom: 30px;'>סדר את תיקי הלקוחות בקלות, אוטומטית, וישירות מהדרייב.</p>", unsafe_allow_html=True)
 
-# חלוקה ראשית: צד ימין (הגדרות) | צד שמאל (לוח עבודה)
-# היחס הוא 1 ל-3 כדי לתת הרבה מקום לטבלה
 control_col, work_col = st.columns([1, 2.8], gap="large")
 
 # --- פאנל ימני: הגדרות וייבוא ---
@@ -248,7 +166,7 @@ with control_col:
     final_name = st.text_input("שם הקובץ הסופי", "קלסר_נספחים_מאוחד")
     
     st.markdown("<br>", unsafe_allow_html=True)
-    rename_source = st.checkbox("סדר את שמות הקבצים בדרייב", value=False, help="אם מסומן, המערכת תשנה את שמות הקבצים המקוריים ל'נספח X - שם'")
+    rename_source = st.checkbox("סדר את שמות הקבצים בדרייב", value=False)
     
     st.markdown("<br>", unsafe_allow_html=True)
     
@@ -268,14 +186,13 @@ with control_col:
             else:
                 st.error("לא נמצאו קבצים או בעיית הרשאה")
     st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True) # סגירת כרטיס
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # --- פאנל שמאלי: שולחן העבודה ---
 with work_col:
     if st.session_state.binder_files:
         st.markdown('<div class="css-card">', unsafe_allow_html=True)
         
-        # כותרת וכפתורי פעולה עליונים
         top_c1, top_c2 = st.columns([3, 1])
         top_c1.markdown(f"<h3>📄 לוח עריכה ({len([x for x in st.session_state.binder_files if x['type']=='file'])} מסמכים)</h3>", unsafe_allow_html=True)
         if top_c2.button("נקה הכל"):
@@ -284,7 +201,6 @@ with work_col:
             
         st.markdown("---")
 
-        # כפתור הוספת חוצץ
         st.markdown('<div class="divider-btn">', unsafe_allow_html=True)
         if st.button("➕ הוסף שער נספח חדש"):
             st.session_state.binder_files.append({"type": "divider", "title": "כותרת הנספח...", "key": f"div_{len(st.session_state.binder_files)}"})
@@ -293,7 +209,6 @@ with work_col:
         
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # כותרות הטבלה
         h1, h2, h3, h4 = st.columns([0.5, 3.5, 1, 1])
         h1.caption("סדר")
         h2.caption("מסמך / כותרת")
@@ -302,46 +217,32 @@ with work_col:
         
         to_del = []; mv_up = None; mv_dn = None
         
-        # --- הלולאה המרכזית ---
         for i, item in enumerate(st.session_state.binder_files):
-            
-            # קביעת סגנון לפי סוג
             bg_style = "divider-row-style" if item['type'] == 'divider' else "file-row-style"
             
             with st.container():
-                # שימוש ב-HTML מותאם בתוך Markdown כדי ליצור את המסגרת, ובתוך זה עמודות של Streamlit
-                # טריק: אנחנו לא עוטפים הכל ב-HTML כי אז אי אפשר לשים כפתורים של סטרים-ליט.
-                # במקום זה, נשתמש בעיצוב מינימלי.
-                
                 cols = st.columns([0.5, 3.5, 1, 1])
-                
-                # עמודה 1: הזזה
                 with cols[0]:
                     if i>0 and st.button("⬆️", key=f"u{i}"): mv_up=i
                     if i<len(st.session_state.binder_files)-1 and st.button("⬇️", key=f"d{i}"): mv_dn=i
                 
-                # עמודה 2: תוכן (שונה בין קובץ לחוצץ)
                 with cols[1]:
                     if item['type'] == 'divider':
                         item['title'] = st.text_input("hidden", item['title'], key=f"t{i}", label_visibility="collapsed", placeholder="שם הנספח...")
                     else:
                         st.markdown(f"**{item['name']}**")
                 
-                # עמודה 3: סטטוס
                 with cols[2]:
                     if item['type'] == 'divider':
                         st.markdown('<span class="status-badge" style="background:#dbeafe; color:#1e40af;">שער</span>', unsafe_allow_html=True)
                     else:
                         st.markdown('<span class="status-badge">ממתין</span>', unsafe_allow_html=True)
 
-                # עמודה 4: מחיקה
                 with cols[3]:
                     if st.button("🗑️", key=f"del{i}"): to_del.append(i)
             
-            # קו מפריד עדין
             st.markdown(f"<div class='{bg_style}' style='height: 2px; margin-bottom: 10px;'></div>", unsafe_allow_html=True)
 
-        # לוגיקת הזזה ומחיקה
         if mv_up is not None:
             st.session_state.binder_files[mv_up], st.session_state.binder_files[mv_up-1] = st.session_state.binder_files[mv_up-1], st.session_state.binder_files[mv_up]
             st.rerun()
@@ -404,20 +305,33 @@ with work_col:
                 status.info("🔢 ממספר דפים ודוחס...")
                 res = compress_if_needed(add_footer_numbers(merged.getvalue()))
                 
-                status.info("☁️ מעלה לדרייב...")
-                upload_final_pdf(st.session_state.folder_id, res, f"{final_name}.pdf")
+                status.info("☁️ מנסה להעלות לדרייב...")
                 
-                bar.progress(100)
-                st.balloons()
-                status.success(f"✅ בוצע! הקובץ '{final_name}.pdf' ממתין לך בתיקייה.")
+                # -----------------------------------------------------------
+                # התיקון: ניסיון להעלות, ואם נכשל - לא קורסים אלא נותנים הורדה
+                # -----------------------------------------------------------
+                try:
+                    upload_final_pdf(st.session_state.folder_id, res, f"{final_name}.pdf")
+                    st.balloons()
+                    status.success(f"✅ בוצע בהצלחה! הקובץ '{final_name}.pdf' מחכה לך בתיקייה בדרייב.")
+                except Exception as e:
+                    status.warning(f"⚠️ הקובץ מוכן, אך לא ניתן לשמור אותו בדרייב (חריגת נפח רובוט). אנא הורד אותו מכאן:")
                 
-            except Exception as e: st.error(f"שגיאה: {e}")
+                # כפתור הורדה שמופיע תמיד בסוף התהליך
+                st.markdown('<div class="backup-download">', unsafe_allow_html=True)
+                st.download_button(
+                    label=f"📥 לחץ כאן להורדת {final_name}.pdf",
+                    data=res,
+                    file_name=f"{final_name}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+                st.markdown('</div>', unsafe_allow_html=True)
+                
+            except Exception as e: st.error(f"שגיאה בתהליך: {e}")
         st.markdown('</div>', unsafe_allow_html=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True) # סגירת כרטיס לוח העבודה
-
+        st.markdown('</div>', unsafe_allow_html=True) 
     else:
-        # מסך ריק (Placeholder) יפה כשיש ריק
         st.markdown("""
         <div class="css-card" style="text-align: center; padding: 50px;">
             <h2 style="color: #cbd5e1;">👈 התחל בייבוא קבצים מצד ימין</h2>
