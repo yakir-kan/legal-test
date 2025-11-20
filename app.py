@@ -12,7 +12,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
 
 # ==========================================
-# 1. עיצוב CSS וקונפיגורציה
+# 1. עיצוב CSS
 # ==========================================
 st.set_page_config(page_title="Law-Gic Ultimate", layout="wide")
 
@@ -44,14 +44,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. ניהול STATE (עם מנגנון הגנה משגיאות)
+# 2. ניהול STATE (עם מנגנון הגנה)
 # ==========================================
-# הגנה: אם המשתנה קיים אך משובש (לא רשימה), נאפס אותו
-if 'items' in st.session_state and not isinstance(st.session_state.items, list):
+# כאן היה הבאג - אנחנו מוודאים שהרשימה קיימת ותקינה
+if 'items' not in st.session_state or not isinstance(st.session_state.items, list):
     st.session_state.items = []
 
-if 'items' not in st.session_state: st.session_state.items = []
-if 'folder_id' not in st.session_state: st.session_state.folder_id = None
+if 'folder_id' not in st.session_state: 
+    st.session_state.folder_id = None
 
 # ==========================================
 # 3. מנוע גוגל דרייב
@@ -65,7 +65,7 @@ def get_drive_service():
         )
         return build('drive', 'v3', credentials=creds)
     except Exception as e:
-        st.error(f"שגיאת חיבור: {e}")
+        st.error(f"שגיאת חיבור לגוגל: {e}")
         return None
 
 def list_files_from_drive(folder_link):
@@ -76,11 +76,15 @@ def list_files_from_drive(folder_link):
     service = get_drive_service()
     if not service: return None, []
     
-    results = service.files().list(
-        q=f"'{fid}' in parents and mimeType='application/pdf' and trashed=false",
-        fields="files(id, name)", orderBy="name"
-    ).execute()
-    return fid, results.get('files', [])
+    try:
+        results = service.files().list(
+            q=f"'{fid}' in parents and mimeType='application/pdf' and trashed=false",
+            fields="files(id, name)", orderBy="name"
+        ).execute()
+        return fid, results.get('files', [])
+    except Exception as e:
+        st.error(f"לא הצלחתי לקרוא מהתיקייה. האם שיתפת אותה עם הרובוט? ({e})")
+        return None, []
 
 def download_file_content(file_id):
     service = get_drive_service()
@@ -191,11 +195,10 @@ with st.expander("1. הגדרות וייבוא", expanded=not st.session_state.i
                 for f in files:
                     st.session_state.items.append({
                         "type": "file", "id": f['id'], "name": f['name'], 
-                        "title": f['name'], # שם התחלתי
+                        "title": f['name'], 
                         "key": f['id']
                     })
                 st.rerun()
-            else: st.error("שגיאה במשיכת הקבצים")
 
 # -- שלב ב: עריכה --
 if st.session_state.items:
