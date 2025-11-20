@@ -83,6 +83,14 @@ st.markdown("""
         padding: 12px !important;
         font-weight: bold;
     }
+    
+    /* עיצוב אינפוטים בתוך הטבלה */
+    .stTextInput input {
+        padding: 4px 8px;
+        font-size: 14px;
+        min-height: 0px;
+        height: 35px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -133,7 +141,7 @@ def rename_drive_file(file_id, new_name):
     service.files().update(fileId=file_id, body={'name': new_name}).execute()
 
 # ==========================================
-# 4. מנוע PDF (הלוגיקה המקורית שעבדה!)
+# 4. מנוע PDF
 # ==========================================
 
 def get_page_count(fh):
@@ -141,7 +149,6 @@ def get_page_count(fh):
     except: return 0
 
 def generate_cover_html(annex_num, title, doc_start_page):
-    # זה העיצוב המדויק שביקשת: הכותרת בגדול, ומספר העמוד מתייחס למסמך
     return f"""<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><style>
     body{{font-family:'DejaVu Sans';text-align:center;padding-top:250px;}}
     .annex-title{{font-size:40px;font-weight:bold;margin-bottom:20px;}}
@@ -152,7 +159,6 @@ def generate_cover_html(annex_num, title, doc_start_page):
     <div class="page-num">עמוד {doc_start_page}</div></body></html>"""
 
 def generate_toc_html(rows):
-    # טבלת תוכן עניינים עם מסגרות
     rows_html = "".join([f"<tr><td style='text-align:center;font-size:18px;'>{r['page']}</td><td style='text-align:right;font-size:18px;padding-right:15px;'>{r['title']}</td><td style='text-align:center;font-size:18px;font-weight:bold;'>נספח {r['num']}</td></tr>" for r in rows])
     return f"""<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><style>
     body{{font-family:'DejaVu Sans';padding:40px;}}h1{{text-align:center;font-size:45px;font-weight:bold;margin-bottom:30px;}}
@@ -174,7 +180,6 @@ def add_footer_numbers(pdf_bytes):
         w, h = float(page.mediabox.width), float(page.mediabox.height)
         rot = int(page.get('/Rotate', 0) or 0) % 360
         packet = io.BytesIO(); can = canvas.Canvas(packet, pagesize=(w, h)); can.setFont("Helvetica", 12)
-        # לוגיקה לזיהוי סיבוב דף (בנקים וכו')
         if rot == 0: can.drawCentredString(w/2, 10*mm, str(i+1))
         elif rot == 90: can.translate(w-10*mm, h/2); can.rotate(90); can.drawCentredString(0,0,str(i+1))
         elif rot == 270: can.translate(10*mm, h/2); can.rotate(270); can.drawCentredString(0,0,str(i+1))
@@ -191,7 +196,7 @@ def compress_if_needed(pdf_bytes):
     except: return pdf_bytes
 
 # ==========================================
-# 5. ממשק משתמש - הפעם פשוט וטבלאי
+# 5. ממשק משתמש (UI)
 # ==========================================
 
 st.markdown("<h1>מערכת איגוד מסמכים</h1>", unsafe_allow_html=True)
@@ -212,7 +217,7 @@ with st.container():
                 for f in files:
                     st.session_state.binder_files.append({
                         "type": "file", "id": f['id'], "name": f['name'], 
-                        "title": f['name'], "key": f['id']
+                        "title": f['name'], "key": f['id'] # טעינת שם הקובץ המקורי לכותרת
                     })
                 st.rerun()
 
@@ -235,21 +240,15 @@ if st.session_state.binder_files:
     </div>
     """, unsafe_allow_html=True)
     
-    # ניהול לולאה
     mv_up = None; mv_dn = None; to_del = []
     
     for i, item in enumerate(st.session_state.binder_files):
-        
-        # קביעת סוג שורה
         row_class = "divider-row" if item['type'] == 'divider' else "file-row"
         
         with st.container():
-            # פתיחת DIV
             st.markdown(f'<div class="{row_class}">', unsafe_allow_html=True)
-            
             cols = st.columns([1.2, 1, 7, 0.5])
             
-            # כפתורים
             with cols[0]:
                 st.markdown('<div class="small-btn">', unsafe_allow_html=True)
                 c_u, c_d = st.columns(2)
@@ -257,27 +256,22 @@ if st.session_state.binder_files:
                 if i<len(st.session_state.binder_files)-1 and c_d.button("▼", key=f"d{i}"): mv_dn=i
                 st.markdown('</div>', unsafe_allow_html=True)
             
-            # סוג
             with cols[1]:
                 if item['type'] == 'divider': st.markdown("<b>🟦 נספח</b>", unsafe_allow_html=True)
                 else: st.markdown("📄 קובץ", unsafe_allow_html=True)
             
-            # תוכן
+            # --- השינוי: שדה עריכה גם לקובץ וגם לנספח ---
             with cols[2]:
-                if item['type'] == 'divider':
-                    item['title'] = st.text_input("hidden", item['title'], key=f"t{i}", label_visibility="collapsed", placeholder="הקלד כותרת לנספח...")
-                else:
-                    st.text(item['name'])
-                    
-            # מחיקה
+                # כאן שינינו מ-st.text ל-st.text_input גם עבור קבצים
+                item['title'] = st.text_input("hidden", item['title'], key=f"t{i}", label_visibility="collapsed")
+
             with cols[3]:
                 st.markdown('<div class="small-btn">', unsafe_allow_html=True)
                 if st.button("✕", key=f"del{i}"): to_del.append(i)
                 st.markdown('</div>', unsafe_allow_html=True)
                 
-            st.markdown('</div>', unsafe_allow_html=True) # סגירת DIV
+            st.markdown('</div>', unsafe_allow_html=True)
 
-    # ביצוע פעולות
     if mv_up is not None:
         st.session_state.binder_files[mv_up], st.session_state.binder_files[mv_up-1] = st.session_state.binder_files[mv_up-1], st.session_state.binder_files[mv_up]
         st.rerun()
@@ -287,53 +281,36 @@ if st.session_state.binder_files:
     if to_del:
         for idx in sorted(to_del, reverse=True): del st.session_state.binder_files[idx]
         st.rerun()
+        
+    if st.button("נקה הכל"):
+        st.session_state.binder_files = []
+        st.rerun()
 
-    # --- כפתור הפקה ---
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown('<div class="generate-btn">', unsafe_allow_html=True)
     
+    st.markdown('<div class="generate-btn">', unsafe_allow_html=True)
     if st.button("🚀 הפק קלסר סופי"):
         status = st.empty(); bar = st.progress(0)
         try:
             status.info("📥 מוריד קבצים...")
-            
-            # --- לוגיקת הפקה (Ultimate Logic) ---
-            toc_data = []
-            temp_writer = PdfWriter() # מכיל את הכל כולל שערים
-            curr_page = 2 # עמוד 1 הוא תוכן עניינים
-            
-            curr_annex_num = 0
-            annex_file_counter = 0
-            curr_annex_title = ""
-            
-            total = len(st.session_state.binder_files)
+            toc_data = []; temp_writer = PdfWriter()
+            curr_page = 2; curr_annex_num = 0; curr_annex_title = ""
+            annex_file_counter = 0; total = len(st.session_state.binder_files)
             
             for idx, item in enumerate(st.session_state.binder_files):
                 bar.progress((idx/total)*0.8)
-                
                 if item['type'] == 'divider':
-                    # זהו שער נספח
                     curr_annex_num += 1
                     curr_annex_title = item['title']
                     annex_file_counter = 0
-                    
-                    # השער הוא בעמוד הנוכחי. המסמך יתחיל בעמוד הבא
                     doc_start = curr_page + 1
-                    
-                    # יצירת השער והוספתו
                     cover = html_to_pdf(generate_cover_html(curr_annex_num, item['title'], doc_start))
                     if cover:
                         for p in PdfReader(io.BytesIO(cover)).pages: temp_writer.add_page(p)
-                        curr_page += 1 # השער תופס עמוד אחד
-                    
-                    # רישום לתוכן העניינים
+                        curr_page += 1
                     toc_data.append({"page": doc_start, "title": item['title'], "num": curr_annex_num})
-                    
                 else:
-                    # זהו קובץ
                     fh = download_file_content(item['id'])
-                    
-                    # שינוי שם אם התבקש (רק אם אנחנו בתוך נספח)
                     if rename_source and curr_annex_num > 0:
                         annex_file_counter += 1
                         ext = Path(item['name']).suffix
@@ -342,26 +319,20 @@ if st.session_state.binder_files:
                         try: 
                             if item['name'] != new_n: rename_drive_file(item['id'], new_n)
                         except: pass
-
                     reader = PdfReader(fh)
                     for p in reader.pages: temp_writer.add_page(p)
                     curr_page += len(reader.pages)
-            
-            # יצירת TOC סופי
+
             status.info("📑 בונה תוכן עניינים...")
             toc = html_to_pdf(generate_toc_html(toc_data))
-            
             final_w = PdfWriter()
             if toc:
                 for p in PdfReader(io.BytesIO(toc)).pages: final_w.add_page(p)
-                
-            # מיזוג הכל (TOC + מה שאספנו)
+            
             bio = io.BytesIO(); temp_writer.write(bio); bio.seek(0)
             for p in PdfReader(bio).pages: final_w.add_page(p)
             
-            # שמירה לזיכרון
             merged = io.BytesIO(); final_w.write(merged)
-            
             status.info("🔢 ממספר ודוחס...")
             res = compress_if_needed(add_footer_numbers(merged.getvalue()))
             
@@ -376,5 +347,4 @@ if st.session_state.binder_files:
                 st.download_button("📥 הורד", res, f"{final_name}.pdf")
                 
         except Exception as e: st.error(f"שגיאה: {e}")
-        
     st.markdown('</div>', unsafe_allow_html=True)
