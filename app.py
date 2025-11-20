@@ -12,7 +12,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
 
 # ==========================================
-# 1. עיצוב CSS
+# 1. עיצוב CSS וקונפיגורציה
 # ==========================================
 st.set_page_config(page_title="Law-Gic Ultimate", layout="wide")
 
@@ -44,11 +44,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. ניהול STATE (עם מנגנון הגנה)
+# 2. ניהול STATE (התיקון: שינוי שם המשתנה)
 # ==========================================
-# כאן היה הבאג - אנחנו מוודאים שהרשימה קיימת ותקינה
-if 'items' not in st.session_state or not isinstance(st.session_state.items, list):
-    st.session_state.items = []
+# שינינו את השם מ-items ל-binder_files כדי למנוע התנגשות
+if 'binder_files' not in st.session_state or not isinstance(st.session_state.binder_files, list):
+    st.session_state.binder_files = []
 
 if 'folder_id' not in st.session_state: 
     st.session_state.folder_id = None
@@ -83,7 +83,7 @@ def list_files_from_drive(folder_link):
         ).execute()
         return fid, results.get('files', [])
     except Exception as e:
-        st.error(f"לא הצלחתי לקרוא מהתיקייה. האם שיתפת אותה עם הרובוט? ({e})")
+        st.error(f"לא הצלחתי לקרוא מהתיקייה. וודא ששיתפת אותה עם הרובוט! ({e})")
         return None, []
 
 def download_file_content(file_id):
@@ -177,7 +177,7 @@ def compress_if_needed(pdf_bytes):
 st.title("⚖️ Law-Gic Ultimate")
 
 # -- שלב א --
-with st.expander("1. הגדרות וייבוא", expanded=not st.session_state.items):
+with st.expander("1. הגדרות וייבוא", expanded=not st.session_state.binder_files):
     c1, c2 = st.columns([3, 1])
     link = c1.text_input("לינק לתיקייה:")
     final_name = c2.text_input("שם לקובץ המאוחד:", "קלסר_נספחים")
@@ -191,9 +191,9 @@ with st.expander("1. הגדרות וייבוא", expanded=not st.session_state.i
             fid, files = list_files_from_drive(link)
             if fid and files:
                 st.session_state.folder_id = fid
-                st.session_state.items = []
+                st.session_state.binder_files = [] # איפוס הרשימה החדשה
                 for f in files:
-                    st.session_state.items.append({
+                    st.session_state.binder_files.append({
                         "type": "file", "id": f['id'], "name": f['name'], 
                         "title": f['name'], 
                         "key": f['id']
@@ -201,26 +201,25 @@ with st.expander("1. הגדרות וייבוא", expanded=not st.session_state.i
                 st.rerun()
 
 # -- שלב ב: עריכה --
-if st.session_state.items:
+if st.session_state.binder_files:
     st.divider()
     c_head, c_act = st.columns([3, 1])
     c_head.subheader("2. סידור התיק")
     
-    # כפתור איפוס למקרה חירום
     if c_act.button("נקה הכל (איפוס)"):
-        st.session_state.items = []
+        st.session_state.binder_files = []
         st.rerun()
     
     st.markdown('<div class="add-divider-btn">', unsafe_allow_html=True)
     if st.button("➕ הוסף שער נספח (חוצץ)"):
-        st.session_state.items.append({"type": "divider", "title": "כותרת הנספח...", "key": f"div_{len(st.session_state.items)}"})
+        st.session_state.binder_files.append({"type": "divider", "title": "כותרת הנספח...", "key": f"div_{len(st.session_state.binder_files)}"})
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
     
     # ניהול רשימה
     to_del = []; mv_up = None; mv_dn = None
     
-    for i, item in enumerate(st.session_state.items):
+    for i, item in enumerate(st.session_state.binder_files):
         if item['type'] == 'divider':
             with st.container():
                 st.markdown(f'<div class="divider-row">', unsafe_allow_html=True)
@@ -228,7 +227,7 @@ if st.session_state.items:
                 with c1:
                     c_u, c_d = st.columns(2)
                     if i>0 and c_u.button("⬆️", key=f"u{i}"): mv_up=i
-                    if i<len(st.session_state.items)-1 and c_d.button("⬇️", key=f"d{i}"): mv_dn=i
+                    if i<len(st.session_state.binder_files)-1 and c_d.button("⬇️", key=f"d{i}"): mv_dn=i
                 with c2: item['title'] = st.text_input("כותרת", item['title'], key=f"t{i}", label_visibility="collapsed")
                 with c3: 
                     if st.button("🗑️", key=f"x{i}"): to_del.append(i)
@@ -239,20 +238,20 @@ if st.session_state.items:
                 with c1:
                     c_u, c_d = st.columns(2)
                     if i>0 and c_u.button("⬆️", key=f"u{i}"): mv_up=i
-                    if i<len(st.session_state.items)-1 and c_d.button("⬇️", key=f"d{i}"): mv_dn=i
+                    if i<len(st.session_state.binder_files)-1 and c_d.button("⬇️", key=f"d{i}"): mv_dn=i
                 with c2: st.text(f"📄 {item['name']}")
                 with c3:
                      if st.button("❌", key=f"x{i}"): to_del.append(i)
                 st.divider()
 
     if mv_up is not None:
-        st.session_state.items[mv_up], st.session_state.items[mv_up-1] = st.session_state.items[mv_up-1], st.session_state.items[mv_up]
+        st.session_state.binder_files[mv_up], st.session_state.binder_files[mv_up-1] = st.session_state.binder_files[mv_up-1], st.session_state.binder_files[mv_up]
         st.rerun()
     if mv_dn is not None:
-        st.session_state.items[mv_dn], st.session_state.items[mv_dn+1] = st.session_state.items[mv_dn+1], st.session_state.items[mv_dn]
+        st.session_state.binder_files[mv_dn], st.session_state.binder_files[mv_dn+1] = st.session_state.binder_files[mv_dn+1], st.session_state.binder_files[mv_dn]
         st.rerun()
     if to_del:
-        for idx in sorted(to_del, reverse=True): del st.session_state.items[idx]
+        for idx in sorted(to_del, reverse=True): del st.session_state.binder_files[idx]
         st.rerun()
 
     # -- שלב ג: הפקה --
@@ -266,8 +265,8 @@ if st.session_state.items:
             curr_page = 2; curr_annex_num = 0; curr_annex_title = ""
             annex_file_counter = 0
             
-            total = len(st.session_state.items)
-            for idx, item in enumerate(st.session_state.items):
+            total = len(st.session_state.binder_files)
+            for idx, item in enumerate(st.session_state.binder_files):
                 bar.progress((idx/total)*0.8)
                 
                 if item['type'] == 'divider':
