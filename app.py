@@ -44,8 +44,12 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. ניהול STATE
+# 2. ניהול STATE (עם מנגנון הגנה משגיאות)
 # ==========================================
+# הגנה: אם המשתנה קיים אך משובש (לא רשימה), נאפס אותו
+if 'items' in st.session_state and not isinstance(st.session_state.items, list):
+    st.session_state.items = []
+
 if 'items' not in st.session_state: st.session_state.items = []
 if 'folder_id' not in st.session_state: st.session_state.folder_id = None
 
@@ -95,7 +99,6 @@ def upload_final_pdf(folder_id, pdf_bytes, name):
     service.files().create(body=meta, media_body=media).execute()
 
 def rename_drive_file(file_id, new_name):
-    """פונקציה לשינוי שם קובץ בדרייב"""
     service = get_drive_service()
     file = {'name': new_name}
     service.files().update(fileId=file_id, body=file).execute()
@@ -200,6 +203,11 @@ if st.session_state.items:
     c_head, c_act = st.columns([3, 1])
     c_head.subheader("2. סידור התיק")
     
+    # כפתור איפוס למקרה חירום
+    if c_act.button("נקה הכל (איפוס)"):
+        st.session_state.items = []
+        st.rerun()
+    
     st.markdown('<div class="add-divider-btn">', unsafe_allow_html=True)
     if st.button("➕ הוסף שער נספח (חוצץ)"):
         st.session_state.items.append({"type": "divider", "title": "כותרת הנספח...", "key": f"div_{len(st.session_state.items)}"})
@@ -253,8 +261,6 @@ if st.session_state.items:
             status.info("מעבד...")
             writer = PdfWriter(); toc_data = []; temp_writer = PdfWriter()
             curr_page = 2; curr_annex_num = 0; curr_annex_title = ""
-            
-            # משתנים לניהול שמות קבצים בתוך נספח (למקרה של כמה קבצים באותו נספח)
             annex_file_counter = 0
             
             total = len(st.session_state.items)
@@ -264,7 +270,7 @@ if st.session_state.items:
                 if item['type'] == 'divider':
                     curr_annex_num += 1
                     curr_annex_title = item['title']
-                    annex_file_counter = 0 # איפוס מונה קבצים לנספח הזה
+                    annex_file_counter = 0
                     
                     doc_start = curr_page + 1
                     cover = html_to_pdf(generate_cover_html(curr_annex_num, item['title'], doc_start))
@@ -276,37 +282,20 @@ if st.session_state.items:
                 else: # זה קובץ
                     fh = download_file_content(item['id'])
                     
-                    # -- לוגיקת שינוי שם (אם נבחר) --
                     if rename_source:
                         new_name = ""
-                        if curr_annex_num == 0:
-                            # מסמך פתיחה (לפני נספחים)
-                            # לא משנים שם, או אפשר לנקות אותו
-                            pass 
+                        if curr_annex_num == 0: pass 
                         else:
-                            # מסמך בתוך נספח
                             annex_file_counter += 1
                             ext = Path(item['name']).suffix
-                            
-                            # אם יש רק קובץ אחד, השם יהיה "נספח X - שם.pdf"
-                            # אם יש כמה, נוסיף מספר רץ
                             base_name = f"נספח {curr_annex_num} - {curr_annex_title}"
+                            if annex_file_counter > 1: new_name = f"{base_name} ({annex_file_counter}){ext}"
+                            else: new_name = f"{base_name}{ext}"
                             
-                            # הערה: מכיוון שאנחנו לא יודעים מראש כמה קבצים יהיו בנספח,
-                            # נשתמש בפורמט אחיד. או שפשוט נוסיף מונה רק אם זה הקובץ השני.
-                            # למען הפשטות: נמספר תמיד אם זה בתוך נספח כדי למנוע התנגשויות
-                            if annex_file_counter > 1:
-                                new_name = f"{base_name} ({annex_file_counter}){ext}"
-                            else:
-                                new_name = f"{base_name}{ext}"
-                                
-                            # ביצוע שינוי השם בפועל בדרייב
                             try:
-                                # בדיקה שלא משנים לאותו שם (חוסך קריאות API)
                                 if item['name'] != new_name:
                                     rename_drive_file(item['id'], new_name)
-                            except Exception as e:
-                                print(f"Failed to rename {item['name']}: {e}")
+                            except Exception as e: print(f"Rename err: {e}")
 
                     reader = PdfReader(fh)
                     for p in reader.pages: temp_writer.add_page(p)
@@ -330,7 +319,7 @@ if st.session_state.items:
             
             bar.progress(100)
             st.balloons()
-            status.success("✅ בוצע! הקובץ בדרייב, והשמות סודרו (אם בחרת בכך).")
+            status.success("✅ בוצע! הקובץ בדרייב.")
             
         except Exception as e: st.error(f"שגיאה: {e}")
     st.markdown('</div>', unsafe_allow_html=True)
