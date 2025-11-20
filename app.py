@@ -58,15 +58,28 @@ if 'folder_id' not in st.session_state:
 # ==========================================
 def get_drive_service():
     try:
+        # קריאת המפתח מהכספת
         key_content = st.secrets["gcp_key"]
-        creds_dict = json.loads(key_content)
+        
+        # תיקון: הוספנו strict=False כדי להתעלם מתווים נסתרים שגורמים לשגיאה
+        creds_dict = json.loads(key_content, strict=False)
+        
         creds = service_account.Credentials.from_service_account_info(
             creds_dict, scopes=['https://www.googleapis.com/auth/drive']
         )
         return build('drive', 'v3', credentials=creds)
     except Exception as e:
-        st.error(f"שגיאת חיבור לגוגל: {e}")
-        return None
+        # במקרה של כישלון, ננסה לנקות את המפתח ידנית
+        try:
+             key_content = st.secrets["gcp_key"].replace('\n', '\\n')
+             creds_dict = json.loads(key_content, strict=False)
+             creds = service_account.Credentials.from_service_account_info(
+                creds_dict, scopes=['https://www.googleapis.com/auth/drive']
+             )
+             return build('drive', 'v3', credentials=creds)
+        except:
+            st.error(f"שגיאה בפענוח המפתח הסודי: {e}. נסה להעתיק אותו מחדש ל-Secrets בזהירות.")
+            return None
 
 def list_files_from_drive(folder_link):
     match = re.search(r'folders/([a-zA-Z0-9-_]+)', folder_link)
