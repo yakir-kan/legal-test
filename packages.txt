@@ -2,3 +2,5 @@ wkhtmltopdf
 fonts-noto-core
 fonts-dejavu-core
 ghostscript
+libreoffice
+default-jre
