@@ -14,7 +14,7 @@ from reportlab.lib.units import mm
 from tempfile import NamedTemporaryFile
 
 # ==========================================
-# 1. עיצוב CSS - טבלאי נקי
+# 1. עיצוב CSS - טבלה נקייה וצפופה
 # ==========================================
 st.set_page_config(page_title="מערכת איגוד מסמכים", layout="wide")
 
@@ -22,29 +22,67 @@ st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700&display=swap');
     .stApp { background-color: #ffffff; direction: rtl; font-family: 'Heebo', sans-serif; }
-    h1 { font-size: 24px; font-weight: bold; border-bottom: 1px solid #ddd; padding-bottom: 10px; margin-bottom: 20px; color: #333; }
+    h1 { font-size: 26px; font-weight: 800; color: #2c3e50; text-align: center; margin-bottom: 20px; }
+
+    /* כותרות הטבלה */
+    .table-header {
+        background-color: #f8f9fa;
+        border-bottom: 2px solid #dee2e6;
+        padding: 10px 0;
+        font-weight: bold;
+        color: #495057;
+        font-size: 14px;
+        display: flex; align-items: center; text-align: center;
+    }
     
-    .table-header { background-color: #f8f9fa; border-bottom: 2px solid #dee2e6; padding: 10px 0; font-weight: bold; color: #495057; font-size: 14px; display: flex; align-items: center; }
-    .data-row { display: flex; border-bottom: 1px solid #f1f1f1; padding: 8px 0; align-items: center; transition: background 0.1s; }
+    /* שורות תוכן */
+    .data-row {
+        display: flex;
+        border-bottom: 1px solid #f1f1f1;
+        padding: 6px 0;
+        align-items: center;
+        transition: background 0.1s;
+    }
     .data-row:hover { background-color: #fcfcfc; }
     
-    .row-main { background-color: #fffbeb; border-right: 3px solid #f1c40f; } 
-    .row-annex { background-color: #f0f8ff; border-right: 3px solid #0d6efd; } 
-    .row-merged { background-color: #ffffff; opacity: 0.7; padding-right: 15px; } 
+    /* סגנונות שונים לשורות */
+    .row-main { background-color: #fffbeb; border-right: 3px solid #f1c40f; } /* צהוב לראשי */
+    .row-annex { background-color: #f0f8ff; border-right: 3px solid #0d6efd; } /* כחול לנספח */
+    .row-merged { background-color: #ffffff; opacity: 0.7; padding-right: 15px; } /* לבן לממוזג */
 
-    .icon-btn button { background: transparent; border: none; color: #6c757d; padding: 0 4px; font-size: 16px; line-height: 1; margin: 0; min-height: 0; }
+    /* כפתורים קטנים */
+    .icon-btn button {
+        background: transparent; border: none; color: #6c757d; padding: 0 4px;
+        font-size: 16px; line-height: 1; margin: 0; min-height: 0;
+    }
     .icon-btn button:hover { color: #000; background: #eee; border-radius: 4px; }
     
-    .stTextInput input { padding: 4px 8px; font-size: 14px; height: 34px; min-height: 34px; border: 1px solid #ced4da; background-color: white; }
+    /* אינפוטים */
+    .stTextInput input {
+        padding: 4px 8px; font-size: 14px; height: 34px; min-height: 34px;
+        border: 1px solid #ced4da; background-color: white; direction: rtl;
+    }
     .stTextInput input:focus { border-color: #80bdff; }
-    .stCheckbox { display: flex; justify-content: center; }
     
-    .generate-btn button { background-color: #198754 !important; color: white !important; font-size: 20px !important; font-weight: bold; width: 100%; padding: 12px !important; border-radius: 8px; margin-top: 20px; }
+    /* צ'ק בוקס */
+    .stCheckbox { display: flex; justify-content: center; align-items: center; }
     
+    /* כפתור הפקה */
+    .generate-btn button {
+        background-color: #198754 !important; color: white !important;
+        font-size: 20px !important; font-weight: bold; width: 100%;
+        padding: 12px !important; border-radius: 8px; margin-top: 20px;
+    }
+    
+    /* תגיות סוג קובץ */
     .badge { font-size: 10px; padding: 2px 4px; border-radius: 3px; font-weight: bold; margin-left: 5px; }
     .bg-pdf { background: #ffebee; color: #c62828; }
     .bg-word { background: #e3f2fd; color: #1565c0; }
+    .bg-gdoc { background: #e8f5e9; color: #2e7d32; }
+    
+    /* מספר נספח */
     .annex-num { font-weight: bold; color: #0d6efd; font-size: 16px; text-align: center; }
+    
 </style>
 """, unsafe_allow_html=True)
 
@@ -56,7 +94,7 @@ if 'binder_files' not in st.session_state or not isinstance(st.session_state.bin
 if 'folder_id' not in st.session_state: st.session_state.folder_id = None
 
 # ==========================================
-# 3. מנוע גוגל דרייב
+# 3. מנוע גוגל דרייב (המתוקן)
 # ==========================================
 def get_drive_service():
     try:
@@ -73,8 +111,19 @@ def list_files_from_drive(folder_link):
     service = get_drive_service()
     if not service: return None, "שגיאת חיבור"
     try:
-        query = (f"'{fid}' in parents and trashed=false and (mimeType='application/pdf' or mimeType='application/vnd.google-apps.document' or mimeType='application/vnd.openxmlformats-officedocument.wordprocessingml.document')")
-        results = service.files().list(q=query, fields="files(id, name, mimeType, createdTime)", orderBy="createdTime", supportsAllDrives=True, includeItemsFromAllDrives=True).execute()
+        # שאילתה רחבה: PDF, Word, וכל סוגי Google Docs
+        query = (f"'{fid}' in parents and trashed=false and "
+                 f"(mimeType='application/pdf' or "
+                 f"mimeType contains 'application/vnd.google-apps' or "
+                 f"mimeType='application/vnd.openxmlformats-officedocument.wordprocessingml.document')")
+        
+        results = service.files().list(
+            q=query,
+            fields="files(id, name, mimeType, createdTime)", 
+            orderBy="createdTime", 
+            supportsAllDrives=True, 
+            includeItemsFromAllDrives=True
+        ).execute()
         return fid, results.get('files', [])
     except Exception as e: return None, str(e)
 
@@ -94,14 +143,28 @@ def convert_word_to_pdf(input_bytes):
 def download_file_content(file_id, mime_type):
     service = get_drive_service()
     fh = io.BytesIO()
-    if mime_type == 'application/pdf': request = service.files().get_media(fileId=file_id)
-    elif 'word' in mime_type or 'document' in mime_type: request = service.files().get_media(fileId=file_id)
-    else: request = service.files().export_media(fileId=file_id, mimeType='application/pdf')
     
-    downloader = MediaIoBaseDownload(fh, request); done = False
+    # --- התיקון: זיהוי חכם יותר ---
+    
+    # 1. כל קבצי גוגל (דוקס, שיטס, סליידס) -> Export
+    if 'vnd.google-apps' in mime_type:
+        # ברירת מחדל ל-PDF
+        request = service.files().export_media(fileId=file_id, mimeType='application/pdf')
+        
+    # 2. כל השאר (PDF, WORD) -> Download
+    else:
+        request = service.files().get_media(fileId=file_id)
+    
+    # ביצוע ההורדה
+    downloader = MediaIoBaseDownload(fh, request)
+    done = False
     while done is False: _, done = downloader.next_chunk()
     fh.seek(0)
-    if 'word' in mime_type or 'document' in mime_type: return convert_word_to_pdf(fh.getvalue())
+    
+    # אם זה וורד שהורדנו -> המרה ל-PDF
+    if 'word' in mime_type or 'document' in mime_type:
+        return convert_word_to_pdf(fh.getvalue())
+        
     return fh
 
 def upload_final_pdf(folder_id, pdf_bytes, name):
@@ -115,10 +178,9 @@ def rename_drive_file(file_id, new_name):
     service.files().update(fileId=file_id, body={'name': new_name}, supportsAllDrives=True).execute()
 
 # ==========================================
-# 4. מנוע PDF (תיקון באגים)
+# 4. מנוע PDF
 # ==========================================
 def generate_cover_html(annex_num, title, doc_start_page):
-    # כאן התיקון: בשער כתוב "עמוד X" שהוא העמוד הבא
     return f"""<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><style>
     body{{font-family:'DejaVu Sans';text-align:center;padding-top:250px;}}
     .annex-title{{font-size:40px;font-weight:bold;margin-bottom:20px;}}
@@ -189,7 +251,7 @@ with st.container():
                 for f in result:
                     mime = f.get('mimeType', '')
                     if 'word' in mime or 'document' in mime: f_type = "WORD"
-                    elif 'google-apps.document' in mime: f_type = "GDOC"
+                    elif 'google-apps' in mime: f_type = "GDOC"
                     else: f_type = "PDF"
                     st.session_state.binder_files.append({
                         "type": "file", "id": f['id'], "name": f['name'], 
@@ -203,6 +265,7 @@ with st.container():
 if st.session_state.binder_files:
     st.markdown("<br>", unsafe_allow_html=True)
     
+    # כותרות הטבלה המעודכנת עם כוכב ראשי
     st.markdown("""
     <div class="table-header">
         <div style="width:5%; text-align:center;">מחק</div>
@@ -222,13 +285,14 @@ if st.session_state.binder_files:
         uid = item.get('unique_id', str(i))
         display_num = ""
         row_style = "file-row"
+        
         is_main = item.get('is_main', False)
         is_merged = item.get('merge', False)
         
         if is_main:
             row_style = "row-main"
             display_num = "⭐"
-            item['merge'] = False 
+            item['merge'] = False
         elif is_merged:
             row_style = "row-merged"
             display_num = "🔗"
@@ -241,34 +305,51 @@ if st.session_state.binder_files:
 
         with st.container():
             st.markdown(f'<div class="data-row {row_style}">', unsafe_allow_html=True)
+            
+            # סדר עמודות מימין לשמאל במסך (בקוד משמאל לימין: 0 הוא ימין ב-RTL)
             cols = st.columns([0.5, 0.8, 0.5, 0.5, 0.5, 4.2, 3.5])
+            
+            # 0. מחק
             with cols[0]:
                 st.markdown('<div class="icon-btn">', unsafe_allow_html=True)
                 if st.button("✕", key=f"del_{uid}"): to_del.append(i)
                 st.markdown('</div>', unsafe_allow_html=True)
+
+            # 1. סדר
             with cols[1]:
                 st.markdown('<div class="icon-btn">', unsafe_allow_html=True)
                 c_u, c_d = st.columns(2)
                 if i>0 and c_u.button("▲", key=f"u_{uid}"): mv_up=i
                 if i<len(st.session_state.binder_files)-1 and c_d.button("▼", key=f"d_{uid}"): mv_dn=i
                 st.markdown('</div>', unsafe_allow_html=True)
+
+            # 2. ראשי (כוכב)
             with cols[2]:
                 is_m = st.checkbox("⭐", value=item.get('is_main', False), key=f"main_{uid}", label_visibility="collapsed")
                 if is_m != item.get('is_main', False): item['is_main'] = is_m; st.rerun()
+
+            # 3. מזג
             with cols[3]:
                 if not disable_merge:
                     is_mg = st.checkbox("🔗", value=item.get('merge', False), key=f"m_{uid}", label_visibility="collapsed")
                     if is_mg != item.get('merge', False): item['merge'] = is_mg; st.rerun()
                 else: st.write("")
+
+            # 4. מספר
             with cols[4]:
                 st.markdown(f"<div class='annex-num'>{display_num}</div>", unsafe_allow_html=True)
+
+            # 5. כותרת
             with cols[5]:
                 ph = "תן כותרת..." 
                 item['title'] = st.text_input("hidden", item['title'], key=f"t_{uid}", label_visibility="collapsed", placeholder=ph)
+
+            # 6. שם קובץ
             with cols[6]:
                 ftype = item.get('ftype', 'PDF')
                 badge = "bg-word" if ftype=="WORD" else "bg-gdoc" if ftype=="GDOC" else "bg-pdf"
                 st.markdown(f"<span class='badge {badge}'>{ftype}</span> <span style='color:#333; font-size:13px;'>{item['name']}</span>", unsafe_allow_html=True)
+
             st.markdown('</div>', unsafe_allow_html=True)
 
     if mv_up is not None:
@@ -287,58 +368,61 @@ if st.session_state.binder_files:
         try:
             status.info("📥 מוריד ומעבד...")
             
-            # הכנה: קריאת כל הקבצים וסידורם
+            # --- לוגיקת בניית הבלוקים (מעודכנת) ---
             blocks = []; current_block = []
             
             for item in st.session_state.binder_files:
                 is_main = item.get('is_main', False)
                 is_merged = item.get('merge', False)
                 
-                start_new = False
-                if is_main: start_new = True
-                elif not is_merged: start_new = True 
+                # מתי מתחילים בלוק חדש?
+                # אם זה "ראשי" -> תמיד בלוק חדש.
+                # אם זה נספח חדש (לא ממוזג) -> בלוק חדש.
+                start_new = is_main or (not is_merged)
                 
                 if start_new:
                     if current_block: blocks.append(current_block)
                     current_block = [item]
-                else: current_block.append(item)
+                else:
+                    current_block.append(item)
             
             if current_block: blocks.append(current_block)
             
-            final_writer = PdfWriter()
-            toc_data = []
-            global_page_counter = 1
-            real_annex_counter = 0
-            
-            processed_blocks = [] 
+            # --- עיבוד ---
+            processed_blocks = []
             total_items = len(st.session_state.binder_files)
             prog = 0
+            real_annex_counter = 0
             
-            # שלב 1: עיבוד כל הבלוקים (הורדה והמרה) לזיכרון
             for block in blocks:
                 head = block[0]
                 is_main = head.get('is_main', False)
                 title = head['title'].strip()
                 
-                block_writer = PdfWriter()
                 if not is_main: real_annex_counter += 1
                 
+                block_writer = PdfWriter()
                 sub_count = 0
+                
                 for f in block:
                     prog += 1; bar.progress((prog/total_items)*0.8)
                     fh = download_file_content(f['id'], f.get('mime', 'application/pdf'))
+                    
                     if fh:
-                        r = PdfReader(fh)
-                        for p in r.pages: block_writer.add_page(p)
-                        
-                        if rename_source and not is_main:
-                            sub_count += 1
-                            ext = Path(f['name']).suffix
-                            base = f"נספח {real_annex_counter} - {title}"
-                            new_n = f"{base} ({sub_count}){ext}" if len(block)>1 else f"{base}{ext}"
-                            try: 
-                                if f['name'] != new_n: rename_drive_file(f['id'], new_n)
-                            except: pass
+                        try:
+                            r = PdfReader(fh)
+                            for p in r.pages: block_writer.add_page(p)
+                            
+                            # שינוי שם בדרייב
+                            if rename_source and not is_main:
+                                sub_count += 1
+                                ext = Path(f['name']).suffix
+                                base = f"נספח {real_annex_counter} - {title}"
+                                new_n = f"{base} ({sub_count}){ext}" if len(block)>1 else f"{base}{ext}"
+                                try: 
+                                    if f['name'] != new_n: rename_drive_file(f['id'], new_n)
+                                except: pass
+                        except: st.warning(f"קובץ פגום: {f['name']}")
 
                 processed_blocks.append({
                     "is_main": is_main,
@@ -348,95 +432,82 @@ if st.session_state.binder_files:
                     "page_count": len(block_writer.pages)
                 })
 
-            # שלב 2: הרכבת TOC והוספת עמודים
+            # --- הרכבה ו-TOC ---
+            status.info("📑 בונה תוכן עניינים...")
             
-            # נניח שה-TOC הוא עמוד אחד (או יותר) שנמצא *אחרי* המסמכים הראשיים
-            # נחשב את מיקום ה-TOC.
-            # נרוץ על הבלוקים: אם הם ראשיים, נוסיף למניין עמודים ראשוני.
+            # חישוב מיקום TOC
+            main_pages_count = sum(b['page_count'] for b in processed_blocks if b['is_main'])
+            toc_start_page = main_pages_count + 1
             
-            main_docs_pages = 0
-            for blk in processed_blocks:
-                if blk['is_main']:
-                    main_docs_pages += blk['page_count']
-                else:
-                    break # ברגע שמגיעים לנספח, מפסיקים לספור פתיחה
+            # הנחה: TOC הוא עמוד 1 (אלא אם יש המון נספחים)
+            toc_length = 1
             
-            # מיקום TOC = אחרי הראשיים
-            toc_start_page = main_docs_pages + 1
-            toc_length = 1 # הערכה ראשונית
+            toc_data = []
             
-            # דף 1 (בפועל) של הנספח הראשון יהיה:
-            # ראשיים + TOC + שער הנספח הראשון (1)
+            # מעבר להרכבת הנתונים ל-TOC
+            # עבור ראשיים: העמוד הוא המיקום הרץ
+            # עבור נספחים: העמוד הוא המיקום הרץ + TOC length (כי הם אחרי ה-TOC)
             
-            # הרכבה בפועל
-            temp_final = PdfWriter()
             current_page_tracker = 1
             
-            # א. הוספת מסמכים ראשיים (לפני TOC)
+            # 1. ראשיים
             for blk in processed_blocks:
                 if blk['is_main']:
-                    # רישום ל-TOC (ללא מספר נספח)
                     toc_data.append({"num": "", "title": blk['title'], "page": current_page_tracker})
-                    
-                    b_io = io.BytesIO(); blk['writer'].write(b_io); b_io.seek(0)
-                    br = PdfReader(b_io)
-                    for p in br.pages: temp_final.add_page(p)
                     current_page_tracker += blk['page_count']
+                else:
+                    break # סיימנו ראשיים בהתחלה
             
-            # ב. שריון מקום ל-TOC
-            # ה-TOC ייכנס כאן. כלומר העמוד הבא הוא current_page_tracker + 1
-            current_page_tracker += toc_length 
+            # מוסיפים את אורך ה-TOC למונה
+            current_page_tracker += toc_length
             
-            # ג. הוספת נספחים
+            # 2. נספחים
             for blk in processed_blocks:
                 if not blk['is_main']:
-                    # זה נספח.
-                    
-                    # 1. יצירת שער (נמצא בעמוד הנוכחי)
-                    # בשער כתוב "עמוד X" -> העמוד שבו מתחיל המסמך (העמוד הבא)
-                    doc_start = current_page_tracker + 1
-                    
-                    cover = html_to_pdf(generate_cover_html(blk['annex_num'], blk['title'], doc_start))
-                    if cover:
-                        cr = PdfReader(io.BytesIO(cover))
-                        for p in cr.pages: temp_final.add_page(p)
-                        current_page_tracker += len(cr.pages)
-                    
-                    # 2. רישום ל-TOC (מפנה לעמוד השער, כלומר doc_start - 1)
-                    toc_data.append({"num": blk['annex_num'], "title": blk['title'], "page": doc_start - 1}) 
-                    
-                    # 3. הוספת המסמך
-                    b_io = io.BytesIO(); blk['writer'].write(b_io); b_io.seek(0)
-                    br = PdfReader(b_io)
-                    for p in br.pages: temp_final.add_page(p)
-                    current_page_tracker += blk['page_count']
+                    doc_start = current_page_tracker + 1 # +1 לשער
+                    toc_data.append({"num": blk['annex_num'], "title": blk['title'], "page": doc_start - 1}) # עמוד השער
+                    current_page_tracker += 1 + blk['page_count'] # שער + מסמך
 
-            # ד. יצירת דף ה-TOC האמיתי
+            # יצירת TOC
             toc_bytes = html_to_pdf(generate_toc_html(toc_data))
             
-            # ה. הרכבה סופית: ראשיים -> TOC -> נספחים
+            # איחוד פיזי
             master = PdfWriter()
             
-            # פיצול ה-temp_final:
-            # חלק ראשון: ראשיים
-            temp_out = io.BytesIO(); temp_final.write(temp_out); temp_out.seek(0)
-            reader_all = PdfReader(temp_out)
+            # א. הוספת ראשיים (שבהתחלה)
+            for blk in processed_blocks:
+                if blk['is_main']:
+                    temp = io.BytesIO(); blk['writer'].write(temp); temp.seek(0)
+                    br = PdfReader(temp)
+                    for p in br.pages: master.add_page(p)
+                else: break # עוצרים כשמגיעים לנספחים
             
-            total_pages_so_far = 0
-            
-            # הוספת עמודי הראשיים
-            for i in range(main_docs_pages):
-                master.add_page(reader_all.pages[i])
-                
-            # הוספת דף ה-TOC
+            # ב. הוספת TOC
             if toc_bytes:
                 tr = PdfReader(io.BytesIO(toc_bytes))
                 for p in tr.pages: master.add_page(p)
                 
-            # הוספת שאר העמודים (הנספחים)
-            for i in range(main_docs_pages, len(reader_all.pages)):
-                master.add_page(reader_all.pages[i])
-            
+            # ג. הוספת נספחים (עם שערים)
+            for blk in processed_blocks:
+                if not blk['is_main']:
+                    # שער
+                    # שים לב: המספר שכתוב על השער הוא העמוד *הבא* (תחילת המסמך)
+                    # אנחנו צריכים לחשב אותו שוב? לא, יש לנו את הלוגיקה.
+                    # העמוד הנוכחי של המאסטר הוא איפה שהשער ייכנס.
+                    # המסמך יתחיל ב (len(master.pages) + 1) + 1
+                    
+                    target_page_num = len(master.pages) + 2
+                    cover = html_to_pdf(generate_cover_html(blk['annex_num'], blk['title'], target_page_num))
+                    if cover:
+                        cr = PdfReader(io.BytesIO(cover))
+                        for p in cr.pages: master.add_page(p)
+                    
+                    # מסמך
+                    temp = io.BytesIO(); blk['writer'].write(temp); temp.seek(0)
+                    br = PdfReader(temp)
+                    for p in br.pages: master.add_page(p)
+
+            # סיום
             out_io = io.BytesIO(); master.write(out_io)
             
             status.info("🔢 מסיים...")
