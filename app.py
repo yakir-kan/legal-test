@@ -12,7 +12,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
 
 # ==========================================
-# 1. עיצוב CSS מותאם אישית (לפי השרטוט)
+# 1. עיצוב CSS - טבלאי, נקי, אקסלי
 # ==========================================
 st.set_page_config(page_title="מערכת איגוד מסמכים", layout="wide")
 
@@ -20,95 +20,89 @@ st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700&display=swap');
     
-    /* רקע כללי */
-    .stApp {
-        background-color: #f0f2f6; /* אפור בהיר מאוד לרקע */
-        font-family: 'Heebo', sans-serif;
-        direction: rtl;
-    }
-    
-    /* --- הקופסאות (Cards) --- */
-    .css-card {
-        background-color: #ffffff;
-        border-radius: 12px;
-        padding: 20px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        border: 1px solid #e0e0e0;
-        margin-bottom: 20px;
-    }
+    .stApp { background-color: #ffffff; direction: rtl; font-family: 'Heebo', sans-serif; }
     
     /* כותרות */
-    h1 { color: #1a2a40; text-align: center; font-weight: 800; margin-bottom: 20px; }
-    h3 { color: #495057; font-size: 20px; margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 15px;}
+    h1 { font-size: 24px; font-weight: bold; border-bottom: 1px solid #ddd; padding-bottom: 10px; margin-bottom: 20px; color: #333; }
+    h3 { font-size: 18px; font-weight: bold; color: #555; margin-bottom: 10px; }
 
-    /* --- שורת חוצץ (שער נספח) - בולטת וכהה --- */
-    .divider-row {
-        background-color: #2c3e50; /* כחול כהה */
-        color: white;
-        padding: 10px;
-        border-radius: 6px;
-        margin-top: 15px;
-        margin-bottom: 0px;
-        border: 1px solid #1a252f;
+    /* --- מבנה הטבלה --- */
+    
+    /* כותרת הטבלה */
+    .table-header {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        padding: 8px;
+        font-weight: bold;
+        color: #495057;
+        display: flex;
+        align-items: center;
     }
     
-    /* --- שורת קובץ - לבנה עם קו מפריד --- */
+    /* שורת נספח (כחול לוג'יק) */
+    .divider-row {
+        background-color: #e3f2fd;
+        border: 1px solid #90caf9;
+        border-top: none; /* כדי שייראה מחובר */
+        padding: 5px;
+        display: flex;
+        align-items: center;
+    }
+    
+    /* שורת קובץ (לבן) */
     .file-row {
         background-color: #ffffff;
-        border-bottom: 1px solid #e0e0e0; /* קו הפרדה */
-        border-left: 1px solid #e0e0e0;
-        border-right: 1px solid #e0e0e0;
-        padding: 10px;
+        border: 1px solid #dee2e6;
+        border-top: none;
+        padding: 5px;
+        display: flex;
+        align-items: center;
     }
     
-    /* --- הזחה לקבצים בתוך נספח --- */
-    .file-indent {
-        border-right: 5px solid #2c3e50 !important; /* פס צד שמראה שייכות */
-        margin-right: 20px; /* הזחה פיזית */
-        background-color: #f8f9fa; /* רקע טיפה שונה */
-    }
-
-    /* --- כפתורים --- */
+    /* --- אלמנטים בתוך הטבלה --- */
     
-    /* כפתור הוספת שער (סגול/כחול בולט) */
-    .add-btn button {
-        background-color: #6c5ce7 !important;
-        color: white !important;
-        border: none !important;
-        font-weight: bold;
-        width: 100%;
-        padding: 10px;
-        border-radius: 8px;
-    }
-    .add-btn button:hover { background-color: #5a4ad1 !important; }
-
-    /* כפתור הפקה ראשי (צהוב/כתום בולט כמו בשרטוט) */
-    .generate-btn button {
-        background-color: #f1c40f !important;
-        color: #2c3e50 !important;
-        font-size: 22px !important;
-        font-weight: 800;
-        width: 100%;
-        padding: 15px !important;
-        border-radius: 8px;
-        margin-top: 20px;
-        box-shadow: 0 4px 10px rgba(241, 196, 15, 0.3);
-    }
-    .generate-btn button:hover { background-color: #d4ac0d !important; }
-
     /* כפתורי פעולה קטנים */
     .small-btn button {
-        padding: 2px 8px !important;
-        font-size: 14px !important;
-        background: white !important;
-        border: 1px solid #ccc !important;
+        padding: 0px 6px !important;
+        font-size: 12px !important;
+        min-height: 24px !important;
+        height: 24px !important;
+        border: 1px solid #ced4da !important;
+        background: #fff !important;
         color: #333 !important;
+        margin: 0 1px !important;
+    }
+    .small-btn button:hover { background: #e9ecef !important; }
+    
+    /* אינפוטים בתוך הטבלה - שייראו שטוחים */
+    .stTextInput input {
+        padding: 4px 8px;
+        font-size: 14px;
+        height: 30px;
+        min-height: 30px;
+        border: 1px solid #ced4da;
+        background-color: white;
     }
     
-    /* אינפוטים נקיים */
-    .stTextInput input {
-        border: 1px solid #ccc;
-        border-radius: 4px;
+    /* כפתור הוספת נספח */
+    .add-btn button {
+        background-color: #f1f3f5 !important;
+        color: #0d6efd !important;
+        border: 1px dashed #0d6efd !important;
+        width: 100%;
+        margin-top: 10px;
+        font-weight: bold;
+    }
+    
+    /* כפתור הפקה */
+    .generate-btn button {
+        background-color: #198754 !important; /* ירוק כהה */
+        color: white !important;
+        font-size: 18px !important;
+        font-weight: bold;
+        width: 100%;
+        padding: 10px !important;
+        margin-top: 20px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -129,7 +123,13 @@ def get_drive_service():
         creds_dict = json.loads(key_content, strict=False)
         creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=['https://www.googleapis.com/auth/drive'])
         return build('drive', 'v3', credentials=creds)
-    except: return None
+    except Exception as e:
+        try: 
+             key_content = st.secrets["gcp_key"].replace('\n', '\\n')
+             creds_dict = json.loads(key_content, strict=False)
+             creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=['https://www.googleapis.com/auth/drive'])
+             return build('drive', 'v3', credentials=creds)
+        except: return None
 
 def list_files_from_drive(folder_link):
     match = re.search(r'folders/([a-zA-Z0-9-_]+)', folder_link)
@@ -217,23 +217,22 @@ def compress_if_needed(pdf_bytes):
 # 5. ממשק משתמש (UI)
 # ==========================================
 
-st.markdown("<h1>מערכת ניהול ואיגוד נספחים</h1>", unsafe_allow_html=True)
+st.markdown("<h1>מערכת איגוד מסמכים</h1>", unsafe_allow_html=True)
 
-# חלוקה לעמודות ראשיות (ימין ושמאל)
-config_col, table_col = st.columns([1, 2.5], gap="medium")
+# חלוקה ראשית: ימין (הגדרות) - שמאל (טבלה)
+# יחס של 1 ל-3 (הטבלה צריכה מקום)
+col_settings, col_table = st.columns([1, 3.5], gap="large")
 
-# --- צד ימין: הגדרות (בתוך קופסה) ---
-with config_col:
-    st.markdown('<div class="css-card">', unsafe_allow_html=True)
-    st.markdown("<h3>⚙️ הגדרות תיק</h3>", unsafe_allow_html=True)
-    
-    link = st.text_input("לינק לתיקייה בדרייב", placeholder="הדבק כאן...")
-    final_name = st.text_input("שם לקובץ המאוחד", "קלסר_נספחים")
-    rename_source = st.checkbox("סדר שמות קבצים (נספח X)", value=False)
+# --- צד ימין: הגדרות ---
+with col_settings:
+    st.markdown("### ⚙️ הגדרות")
+    link = st.text_input("לינק לתיקייה:", placeholder="הדבק כאן...")
+    final_name = st.text_input("שם קובץ סופי:", "קלסר_נספחים")
+    rename_source = st.checkbox("סדר שמות קבצים")
     
     st.markdown("<br>", unsafe_allow_html=True)
     
-    if st.button("📥 ייבא קבצים ללוח", use_container_width=True):
+    if st.button("📥 משוך קבצים", use_container_width=True):
         if link:
             fid, files = list_files_from_drive(link)
             if fid and files:
@@ -245,93 +244,68 @@ with config_col:
                         "title": f['name'], "key": f['id']
                     })
                 st.rerun()
-            else:
-                st.error("לא נמצאו קבצים (בדוק הרשאות)")
-                
+            else: st.error("שגיאה בקישור")
+            
     if st.session_state.binder_files:
-        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("<br><hr>", unsafe_allow_html=True)
         if st.button("נקה הכל"):
             st.session_state.binder_files = []
             st.rerun()
-            
-    st.markdown('</div>', unsafe_allow_html=True)
 
-# --- צד שמאל: לוח עריכה (בתוך קופסה) ---
-with table_col:
-    st.markdown('<div class="css-card">', unsafe_allow_html=True)
-    st.markdown(f"<h3>📝 לוח עריכה ({len([x for x in st.session_state.binder_files if x['type']=='file'])} מסמכים)</h3>", unsafe_allow_html=True)
+# --- צד שמאל: טבלת עריכה ---
+with col_table:
+    st.markdown("### 📝 רשימת מסמכים")
     
     if not st.session_state.binder_files:
-        st.info("👈 הלוח ריק. התחל בייבוא מצד ימין.")
+        st.info("הדבק לינק בצד ימין והתחל לעבוד.")
+    
     else:
-        # כפתור הוספת שער
-        st.markdown('<div class="add-btn">', unsafe_allow_html=True)
-        if st.button("➕ הוסף שער נספח חדש"):
-            st.session_state.binder_files.append({"type": "divider", "title": "", "key": f"div_{len(st.session_state.binder_files)}"})
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        # כותרות
-        h1, h2, h3 = st.columns([0.8, 4, 0.5])
-        h1.caption("סדר")
-        h2.caption("תוכן")
-        h3.caption("מחק")
+        # כותרות הטבלה (Header)
+        st.markdown("""
+        <div class="table-header">
+            <div style="width:12%; text-align:center;">סדר</div>
+            <div style="width:10%; text-align:center;">סוג</div>
+            <div style="width:73%;">שם הקובץ / כותרת הנספח</div>
+            <div style="width:5%; text-align:center;">מחק</div>
+        </div>
+        """, unsafe_allow_html=True)
         
         to_del = []; mv_up = None; mv_dn = None
         
-        # --- הלולאה המרכזית ---
-        is_inside_annex = False
-        
         for i, item in enumerate(st.session_state.binder_files):
+            # קביעת סוג שורה
+            row_class = "divider-row" if item['type'] == 'divider' else "file-row"
             
-            if item['type'] == 'divider':
-                is_inside_annex = True
-                # --- שורת כותרת כהה ---
-                with st.container():
-                    st.markdown('<div class="divider-row">', unsafe_allow_html=True)
-                    cols = st.columns([0.8, 4, 0.5])
-                    
-                    with cols[0]: # כפתורי הזזה
-                        st.markdown('<div class="small-btn">', unsafe_allow_html=True)
-                        if i>0 and st.button("▲", key=f"u{i}"): mv_up=i
-                        if i<len(st.session_state.binder_files)-1 and st.button("▼", key=f"d{i}"): mv_dn=i
-                        st.markdown('</div>', unsafe_allow_html=True)
-                    
-                    with cols[1]: # אינפוט כותרת
-                        item['title'] = st.text_input("hidden", item['title'], key=f"t{i}", label_visibility="collapsed", placeholder="שם הנספח...")
-                    
-                    with cols[2]: # מחיקה
-                        st.markdown('<div class="small-btn">', unsafe_allow_html=True)
-                        if st.button("🗑️", key=f"del{i}"): to_del.append(i)
-                        st.markdown('</div>', unsafe_allow_html=True)
-                    
-                    st.markdown('</div>', unsafe_allow_html=True)
-            
-            else: # קובץ
-                indent_class = "file-indent" if is_inside_annex else ""
+            with st.container():
+                st.markdown(f'<div class="{row_class}">', unsafe_allow_html=True)
+                cols = st.columns([1.2, 1, 7, 0.5])
                 
-                with st.container():
-                    st.markdown(f'<div class="file-row {indent_class}">', unsafe_allow_html=True)
-                    cols = st.columns([0.8, 4, 0.5])
-                    
-                    with cols[0]:
-                        st.markdown('<div class="small-btn">', unsafe_allow_html=True)
-                        if i>0 and st.button("▲", key=f"u{i}"): mv_up=i
-                        if i<len(st.session_state.binder_files)-1 and st.button("▼", key=f"d{i}"): mv_dn=i
-                        st.markdown('</div>', unsafe_allow_html=True)
-                    
-                    with cols[1]:
-                        # שדה עריכה לשם הקובץ
-                        item['title'] = st.text_input("hidden", item['title'], key=f"ft{i}", label_visibility="collapsed")
-                    
-                    with cols[2]:
-                        st.markdown('<div class="small-btn">', unsafe_allow_html=True)
-                        if st.button("✕", key=f"del{i}"): to_del.append(i)
-                        st.markdown('</div>', unsafe_allow_html=True)
-                    
+                # עמודה 1: כפתורי הזזה
+                with cols[0]:
+                    st.markdown('<div class="small-btn">', unsafe_allow_html=True)
+                    c_u, c_d = st.columns(2)
+                    if i>0 and c_u.button("▲", key=f"u{i}"): mv_up=i
+                    if i<len(st.session_state.binder_files)-1 and c_d.button("▼", key=f"d{i}"): mv_dn=i
                     st.markdown('</div>', unsafe_allow_html=True)
+                
+                # עמודה 2: סוג
+                with cols[1]:
+                    if item['type'] == 'divider': st.markdown("<b>🟦 נספח</b>", unsafe_allow_html=True)
+                    else: st.markdown("📄 קובץ", unsafe_allow_html=True)
+                
+                # עמודה 3: תוכן (עריכה)
+                with cols[2]:
+                    # שדה עריכה זהה לשניהם
+                    ph = "שם הנספח..." if item['type'] == 'divider' else "שם הקובץ..."
+                    item['title'] = st.text_input("h", item['title'], key=f"t{i}", label_visibility="collapsed", placeholder=ph)
+
+                # עמודה 4: מחיקה
+                with cols[3]:
+                    st.markdown('<div class="small-btn">', unsafe_allow_html=True)
+                    if st.button("✕", key=f"del{i}"): to_del.append(i)
+                    st.markdown('</div>', unsafe_allow_html=True)
+                    
+                st.markdown('</div>', unsafe_allow_html=True)
 
         # לוגיקה
         if mv_up is not None:
@@ -344,33 +318,40 @@ with table_col:
             for idx in sorted(to_del, reverse=True): del st.session_state.binder_files[idx]
             st.rerun()
 
-        # --- כפתור הפקה ---
+        # כפתור הוספה
+        st.markdown('<div class="add-btn">', unsafe_allow_html=True)
+        if st.button("➕ הוסף שער נספח חדש"):
+            st.session_state.binder_files.append({"type": "divider", "title": "", "key": f"div_{len(st.session_state.binder_files)}"})
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # כפתור הפקה
+        st.markdown("<br>", unsafe_allow_html=True)
         st.markdown('<div class="generate-btn">', unsafe_allow_html=True)
         if st.button("🚀 הפק קלסר ושמור בדרייב"):
             status = st.empty(); bar = st.progress(0)
             try:
                 status.info("📥 מוריד קבצים...")
-                writer = PdfWriter(); toc_data = []; temp_writer = PdfWriter()
-                curr_page = 2; curr_annex_num = 0; curr_annex_title = ""
-                annex_file_counter = 0; total = len(st.session_state.binder_files)
+                toc_data = []; temp_writer = PdfWriter(); curr_page = 2
+                curr_annex_num = 0; curr_annex_title = ""; annex_file_counter = 0
+                total = len(st.session_state.binder_files)
                 
                 for idx, item in enumerate(st.session_state.binder_files):
                     bar.progress((idx/total)*0.8)
+                    
                     if item['type'] == 'divider':
-                        curr_annex_num += 1
-                        curr_annex_title = item['title']
-                        annex_file_counter = 0
+                        curr_annex_num += 1; curr_annex_title = item['title']; annex_file_counter = 0
                         doc_start = curr_page + 1
                         cover = html_to_pdf(generate_cover_html(curr_annex_num, item['title'], doc_start))
                         if cover:
                             for p in PdfReader(io.BytesIO(cover)).pages: temp_writer.add_page(p)
                             curr_page += 1
                         toc_data.append({"page": doc_start, "title": item['title'], "num": curr_annex_num})
-                    else: 
+                        
+                    else:
                         fh = download_file_content(item['id'])
                         if rename_source and curr_annex_num > 0:
-                            annex_file_counter += 1
-                            ext = Path(item['name']).suffix
+                            annex_file_counter += 1; ext = Path(item['name']).suffix
                             base = f"נספח {curr_annex_num} - {curr_annex_title}"
                             new_n = f"{base} ({annex_file_counter}){ext}" if annex_file_counter > 1 else f"{base}{ext}"
                             try: 
@@ -380,7 +361,7 @@ with table_col:
                         for p in reader.pages: temp_writer.add_page(p)
                         curr_page += len(reader.pages)
 
-                status.info("📑 בונה תוכן עניינים...")
+                status.info("📑 מסיים עריכה...")
                 toc = html_to_pdf(generate_toc_html(toc_data))
                 final = PdfWriter()
                 if toc: 
@@ -388,21 +369,19 @@ with table_col:
                 
                 bio = io.BytesIO(); temp_writer.write(bio); bio.seek(0)
                 for p in PdfReader(bio).pages: final.add_page(p)
-                
                 merged = io.BytesIO(); final.write(merged)
-                status.info("🔢 ממספר ודוחס...")
+                
+                status.info("🔢 דוחס ומעלה...")
                 res = compress_if_needed(add_footer_numbers(merged.getvalue()))
                 
                 try:
                     upload_final_pdf(st.session_state.folder_id, res, f"{final_name}.pdf")
                     bar.progress(100)
                     st.balloons()
-                    status.success(f"✅ בוצע! הקובץ מחכה לך בתיקייה.")
-                except Exception as e:
-                    st.warning("לא ניתן לשמור אוטומטית. הורד ידנית:")
-                    st.download_button("📥 הורד למחשב", res, file_name=f"{final_name}.pdf")
-                
+                    status.success(f"✅ בוצע! הקובץ מחכה בתיקייה.")
+                except:
+                    status.warning("לא הצלחתי לשמור בדרייב. הורד ידנית:")
+                    st.download_button("📥 הורד", res, f"{final_name}.pdf")
+                    
             except Exception as e: st.error(f"שגיאה: {e}")
         st.markdown('</div>', unsafe_allow_html=True)
-        
-    st.markdown('</div>', unsafe_allow_html=True)
