@@ -2,9 +2,8 @@ import streamlit as st
 import io
 import re
 import json
-import os
-import subprocess
 import uuid
+import subprocess
 from pathlib import Path
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -12,38 +11,78 @@ from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 from pypdf import PdfReader, PdfWriter
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
+from tempfile import NamedTemporaryFile
 
 # ==========================================
-# 1. עיצוב CSS - טבלאי נקי
+# 1. עיצוב CSS - טבלה אולטימטיבית
 # ==========================================
 st.set_page_config(page_title="מערכת איגוד מסמכים", layout="wide")
 
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700&display=swap');
-    .stApp { background-color: #ffffff; direction: rtl; font-family: 'Heebo', sans-serif; }
-    h1 { font-size: 24px; font-weight: bold; border-bottom: 1px solid #ddd; padding-bottom: 10px; margin-bottom: 20px; color: #333; }
     
-    /* טבלה */
-    .table-header { background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 8px; font-weight: bold; color: #495057; display: flex; align-items: center; }
-    .divider-row { background-color: #e3f2fd; border: 1px solid #90caf9; border-top: none; padding: 5px; display: flex; align-items: center; }
-    .file-row { background-color: #ffffff; border: 1px solid #dee2e6; border-top: none; padding: 5px; display: flex; align-items: center; }
-    .file-row:hover { background-color: #f8f9fa; }
+    .stApp { background-color: #ffffff; direction: rtl; font-family: 'Heebo', sans-serif; }
+    
+    h1 { font-size: 26px; font-weight: 800; color: #2c3e50; text-align: center; margin-bottom: 20px; }
 
-    /* כפתורים */
-    .small-btn button { padding: 0px 6px !important; font-size: 12px !important; min-height: 24px !important; height: 24px !important; border: 1px solid #ced4da !important; background: #fff !important; color: #333 !important; margin: 0 1px !important; }
-    .small-btn button:hover { background: #e9ecef !important; }
-    .add-btn button { background-color: #f1f3f5 !important; color: #0d6efd !important; border: 1px dashed #0d6efd !important; width: 100%; margin-top: 10px; font-weight: bold; }
-    .generate-btn button { background-color: #198754 !important; color: white !important; font-size: 18px !important; font-weight: bold; width: 100%; padding: 10px !important; margin-top: 20px; }
+    /* כותרות הטבלה */
+    .header-row {
+        display: flex;
+        background-color: #f8f9fa;
+        border-top: 2px solid #dee2e6;
+        border-bottom: 2px solid #dee2e6;
+        padding: 10px 0;
+        font-weight: bold;
+        color: #495057;
+        font-size: 14px;
+        align-items: center;
+    }
+    
+    /* שורת תוכן */
+    .data-row {
+        display: flex;
+        border-bottom: 1px solid #f1f1f1;
+        padding: 6px 0;
+        align-items: center;
+        transition: background 0.1s;
+    }
+    .data-row:hover { background-color: #fcfcfc; }
+    
+    /* הדגשה לשורה שהיא ראש נספח (לא ממוזגת) */
+    .is-annex-row {
+        background-color: #f0f7ff !important; /* כחול בהיר מאוד */
+    }
+
+    /* כפתורים קטנים */
+    .icon-btn button {
+        background: transparent; border: none; color: #6c757d; padding: 0 4px;
+        font-size: 16px; line-height: 1; margin: 0; min-height: 0;
+    }
+    .icon-btn button:hover { color: #000; background: #eee; border-radius: 4px; }
     
     /* אינפוטים */
-    .stTextInput input { padding: 4px 8px; font-size: 14px; height: 30px; min-height: 30px; border: 1px solid #ced4da; background-color: white; }
+    .stTextInput input {
+        padding: 4px 8px; font-size: 14px; height: 34px; min-height: 34px;
+        border: 1px solid #ced4da; background-color: white;
+    }
+    .stTextInput input:focus { border-color: #80bdff; }
+    
+    /* צ'ק בוקס */
+    .stCheckbox { display: flex; justify-content: center; }
+    
+    /* כפתור הפקה */
+    .generate-btn button {
+        background-color: #198754 !important; color: white !important;
+        font-size: 20px !important; font-weight: bold; width: 100%;
+        padding: 12px !important; border-radius: 8px; margin-top: 20px;
+    }
     
     /* תגיות סוג קובץ */
-    .badge { font-size: 10px; padding: 2px 5px; border-radius: 3px; font-weight: bold; margin-left: 5px; }
-    .badge-pdf { background: #ffebee; color: #c62828; }
-    .badge-word { background: #e3f2fd; color: #1565c0; }
-    .badge-gdoc { background: #e8f5e9; color: #2e7d32; }
+    .badge { font-size: 10px; padding: 2px 4px; border-radius: 3px; font-weight: bold; margin-right: 5px; }
+    .bg-pdf { background: #ffebee; color: #c62828; }
+    .bg-word { background: #e3f2fd; color: #1565c0; }
+    
 </style>
 """, unsafe_allow_html=True)
 
@@ -63,13 +102,7 @@ def get_drive_service():
         creds_dict = json.loads(key_content, strict=False)
         creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=['https://www.googleapis.com/auth/drive'])
         return build('drive', 'v3', credentials=creds)
-    except Exception as e:
-        try: 
-             key_content = st.secrets["gcp_key"].replace('\n', '\\n')
-             creds_dict = json.loads(key_content, strict=False)
-             creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=['https://www.googleapis.com/auth/drive'])
-             return build('drive', 'v3', credentials=creds)
-        except: return None
+    except: return None
 
 def list_files_from_drive(folder_link):
     match = re.search(r'folders/([a-zA-Z0-9-_]+)', folder_link)
@@ -78,88 +111,40 @@ def list_files_from_drive(folder_link):
     service = get_drive_service()
     if not service: return None, "שגיאת חיבור"
     try:
-        # שאילתה שתומכת גם בוורד וגם בגוגל דוקס
-        query = (f"'{fid}' in parents and trashed=false and "
-                 f"(mimeType='application/pdf' or "
-                 f"mimeType='application/vnd.google-apps.document' or "
-                 f"mimeType='application/vnd.openxmlformats-officedocument.wordprocessingml.document')")
-        
-        results = service.files().list(
-            q=query, 
-            fields="files(id, name, mimeType)", 
-            orderBy="name", 
-            supportsAllDrives=True, 
-            includeItemsFromAllDrives=True
-        ).execute()
+        query = (f"'{fid}' in parents and trashed=false and (mimeType='application/pdf' or mimeType='application/vnd.google-apps.document' or mimeType='application/vnd.openxmlformats-officedocument.wordprocessingml.document')")
+        results = service.files().list(q=query, fields="files(id, name, mimeType)", orderBy="name", supportsAllDrives=True, includeItemsFromAllDrives=True).execute()
         return fid, results.get('files', [])
     except Exception as e: return None, str(e)
-
-def convert_word_to_pdf(input_bytes):
-    """המרה מוורד ל-PDF באמצעות LibreOffice בשרת"""
-    try:
-        # שמירת קובץ הוורד זמנית
-        with NamedTemporaryFile(suffix='.docx', delete=False) as f_in:
-            f_in.write(input_bytes)
-            input_path = f_in.name
-            
-        # הרצת המרה
-        out_dir = os.path.dirname(input_path)
-        subprocess.run(['libreoffice', '--headless', '--convert-to', 'pdf', input_path, '--outdir', out_dir], check=True)
-        
-        # קריאת התוצאה
-        pdf_path = input_path.replace('.docx', '.pdf')
-        with open(pdf_path, 'rb') as f_out:
-            pdf_bytes = f_out.read()
-            
-        # ניקוי
-        try:
-            os.remove(input_path)
-            os.remove(pdf_path)
-        except: pass
-        
-        return pdf_bytes
-    except Exception as e:
-        print(f"Word conversion failed: {e}")
-        return None
 
 def download_file_content(file_id, mime_type):
     service = get_drive_service()
     fh = io.BytesIO()
+    if mime_type == 'application/pdf': request = service.files().get_media(fileId=file_id)
+    elif 'word' in mime_type or 'document' in mime_type: request = service.files().get_media(fileId=file_id)
+    else: request = service.files().export_media(fileId=file_id, mimeType='application/pdf')
     
-    # לוגיקה חכמה לפי סוג קובץ
-    if mime_type == 'application/vnd.google-apps.document':
-        # גוגל דוקס -> Export
-        request = service.files().export_media(fileId=file_id, mimeType='application/pdf')
-        downloader = MediaIoBaseDownload(fh, request)
-        done = False
-        while done is False: _, done = downloader.next_chunk()
-        fh.seek(0)
-        return fh
+    downloader = MediaIoBaseDownload(fh, request); done = False
+    while done is False: _, done = downloader.next_chunk()
+    fh.seek(0)
+    
+    # אם זה וורד, צריך להמיר
+    if 'word' in mime_type or 'document' in mime_type:
+        return convert_word_to_pdf(fh.getvalue())
         
-    elif mime_type == 'application/pdf':
-        # PDF -> הורדה רגילה
-        request = service.files().get_media(fileId=file_id)
-        downloader = MediaIoBaseDownload(fh, request)
-        done = False
-        while done is False: _, done = downloader.next_chunk()
-        fh.seek(0)
-        return fh
-        
-    elif 'word' in mime_type or 'document' in mime_type:
-        # Word -> הורדה רגילה ואז המרה
-        request = service.files().get_media(fileId=file_id)
-        downloader = MediaIoBaseDownload(fh, request)
-        done = False
-        while done is False: _, done = downloader.next_chunk()
-        fh.seek(0)
-        # שליחה להמרה
-        converted_pdf = convert_word_to_pdf(fh.getvalue())
-        if converted_pdf:
-            return io.BytesIO(converted_pdf)
-        else:
-            return None # המרה נכשלה
-            
-    return None
+    return fh
+
+def convert_word_to_pdf(input_bytes):
+    try:
+        with NamedTemporaryFile(suffix='.docx', delete=False) as f_in:
+            f_in.write(input_bytes); input_path = f_in.name
+        out_dir = os.path.dirname(input_path)
+        subprocess.run(['libreoffice', '--headless', '--convert-to', 'pdf', input_path, '--outdir', out_dir], check=True)
+        pdf_path = input_path.replace('.docx', '.pdf')
+        with open(pdf_path, 'rb') as f_out: pdf_bytes = f_out.read()
+        try: os.remove(input_path); os.remove(pdf_path)
+        except: pass
+        return io.BytesIO(pdf_bytes)
+    except: return None
 
 def upload_final_pdf(folder_id, pdf_bytes, name):
     service = get_drive_service()
@@ -174,12 +159,6 @@ def rename_drive_file(file_id, new_name):
 # ==========================================
 # 4. מנוע PDF
 # ==========================================
-from tempfile import NamedTemporaryFile # וידוא ייבוא
-
-def get_page_count(fh):
-    try: return len(PdfReader(fh).pages)
-    except: return 0
-
 def generate_cover_html(annex_num, title, doc_start_page):
     return f"""<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><style>
     body{{font-family:'DejaVu Sans';text-align:center;padding-top:250px;}}
@@ -191,12 +170,12 @@ def generate_cover_html(annex_num, title, doc_start_page):
     <div class="page-num">עמוד {doc_start_page}</div></body></html>"""
 
 def generate_toc_html(rows):
-    rows_html = "".join([f"<tr><td style='text-align:center;font-size:18px;'>{r['page']}</td><td style='text-align:right;font-size:18px;padding-right:15px;'>{r['title']}</td><td style='text-align:center;font-size:18px;font-weight:bold;'>נספח {r['num']}</td></tr>" for r in rows])
+    rows_html = "".join([f"<tr><td style='text-align:center;font-weight:bold;'>{r['num']}</td><td style='text-align:right;padding-right:10px;'>{r['title']}</td><td style='text-align:center;'>{r['page']}</td></tr>" for r in rows])
     return f"""<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><style>
     body{{font-family:'DejaVu Sans';padding:40px;}}h1{{text-align:center;font-size:45px;font-weight:bold;margin-bottom:30px;}}
-    table{{width:100%;border-collapse:collapse;border:2px solid black;}}th,td{{border:1px solid black;padding:10px;}}
+    table{{width:100%;border-collapse:collapse;border:2px solid black;}}th,td{{border:1px solid black;padding:10px;font-size:18px;}}
     th{{background:#fff;font-weight:bold;font-size:20px;text-align:center;border-bottom:2px solid black;}}</style></head><body>
-    <h1>תוכן עניינים לנספחים</h1><table><thead><tr><th style="width:15%">עמוד</th><th style="width:70%">שם הנספח</th><th style="width:15%">נספח מס'</th></tr></thead><tbody>{rows_html}</tbody></table></body></html>"""
+    <h1>תוכן עניינים לנספחים</h1><table><thead><tr><th style="width:15%">נספח מס'</th><th style="width:70%">שם הנספח</th><th style="width:15%">עמוד</th></tr></thead><tbody>{rows_html}</tbody></table></body></html>"""
 
 def html_to_pdf(html):
     try:
@@ -228,14 +207,14 @@ def compress_if_needed(pdf_bytes):
     except: return pdf_bytes
 
 # ==========================================
-# 5. ממשק משתמש (UI)
+# 5. ממשק משתמש
 # ==========================================
 
 st.markdown("<h1>מערכת איגוד מסמכים</h1>", unsafe_allow_html=True)
 
 with st.container():
     c1, c2, c3, c4 = st.columns([3, 1.5, 1, 1])
-    link = c1.text_input("לינק לתיקייה בדרייב:", placeholder="הדבק כאן...", label_visibility="collapsed")
+    link = c1.text_input("לינק", placeholder="הדבק לינק...", label_visibility="collapsed")
     final_name = c2.text_input("שם קובץ", "קלסר_נספחים", label_visibility="collapsed")
     rename_source = c3.checkbox("סדר שמות")
     
@@ -247,76 +226,96 @@ with st.container():
                 st.session_state.binder_files = [] 
                 for f in result:
                     mime = f.get('mimeType', '')
-                    # זיהוי סוג
                     if 'word' in mime or 'document' in mime: f_type = "WORD"
                     elif 'google-apps.document' in mime: f_type = "GDOC"
                     else: f_type = "PDF"
-                    
                     st.session_state.binder_files.append({
                         "type": "file", "id": f['id'], "name": f['name'], 
-                        "title": f['name'], "key": f['id'], "mime": mime, "ftype": f_type,
+                        "title": "", # כותרת ריקה בהתחלה
+                        "merge": False, # לא ממוזג בהתחלה
+                        "key": f['id'], "mime": mime, "ftype": f_type,
                         "unique_id": str(uuid.uuid4())
                     })
                 st.rerun()
             else: st.error(f"שגיאה: {result}")
 
 if st.session_state.binder_files:
-    st.markdown('<div class="add-btn">', unsafe_allow_html=True)
-    if st.button("➕ הוסף שער נספח חדש"):
-        st.session_state.binder_files.append({
-            "type": "divider", "title": "", 
-            "unique_id": str(uuid.uuid4())
-        })
-        st.rerun()
-    st.markdown('</div><br>', unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
     
+    # --- כותרות הטבלה ---
     st.markdown("""
-    <div class="table-header">
-        <div style="display:inline-block; width:12%;">פעולות</div>
-        <div style="display:inline-block; width:10%;">סוג</div>
-        <div style="display:inline-block; width:70%;">שם / כותרת</div>
-        <div style="display:inline-block; width:5%;">מחק</div>
+    <div class="header-row">
+        <div style="width:8%; text-align:center;">סדר</div>
+        <div style="width:5%; text-align:center;">מזג</div>
+        <div style="width:5%; text-align:center;">נספח</div>
+        <div style="width:42%; padding-right:10px;">שם הנספח (כותרת לשער)</div>
+        <div style="width:35%;">שם הקובץ המקורי</div>
+        <div style="width:5%; text-align:center;">מחק</div>
     </div>
     """, unsafe_allow_html=True)
     
-    mv_up = None; mv_dn = None; to_del = []
+    # משתנים ללולאה
+    mv_up=None; mv_dn=None; to_del=[]
+    running_annex_num = 0
     
     for i, item in enumerate(st.session_state.binder_files):
         uid = item.get('unique_id', str(i))
-        row_class = "divider-row" if item['type'] == 'divider' else "file-row"
+        
+        # לוגיקה לחישוב מספר נספח (לתצוגה בלבד)
+        display_num = ""
+        row_style = ""
+        
+        # אם הקובץ *לא* ממוזג ו*יש* לו כותרת -> הוא נספח חדש
+        if not item.get('merge', False) and item['title'].strip():
+            running_annex_num += 1
+            display_num = str(running_annex_num)
+            row_style = "is-annex-row"
+        
+        # אם זה הקובץ הראשון, אי אפשר למזג אותו
+        disable_merge = (i == 0)
         
         with st.container():
-            st.markdown(f'<div class="{row_class}">', unsafe_allow_html=True)
-            cols = st.columns([1.2, 1, 7, 0.5])
+            # פתיחת שורה
+            st.markdown(f'<div class="data-row {row_style}">', unsafe_allow_html=True)
             
+            cols = st.columns([0.8, 0.5, 0.5, 4.2, 3.5, 0.5])
+            
+            # 1. סדר
             with cols[0]:
-                st.markdown('<div class="small-btn">', unsafe_allow_html=True)
+                st.markdown('<div class="icon-btn">', unsafe_allow_html=True)
                 c_u, c_d = st.columns(2)
                 if i>0 and c_u.button("▲", key=f"u_{uid}"): mv_up=i
                 if i<len(st.session_state.binder_files)-1 and c_d.button("▼", key=f"d_{uid}"): mv_dn=i
                 st.markdown('</div>', unsafe_allow_html=True)
             
+            # 2. מיזוג (צ'ק בוקס)
             with cols[1]:
-                if item['type'] == 'divider': 
-                    st.markdown("<b>🟦 נספח</b>", unsafe_allow_html=True)
-                else:
-                    ftype = item.get('ftype', 'PDF')
-                    if ftype == "WORD": b_cls="badge-word"; ico="📘"
-                    elif ftype == "GDOC": b_cls="badge-gdoc"; ico="📝"
-                    else: b_cls="badge-pdf"; ico="📕"
-                    st.markdown(f"{ico} <span class='badge {b_cls}'>{ftype}</span>", unsafe_allow_html=True)
-            
+                is_merged = st.checkbox("🔗", value=item.get('merge', False), key=f"m_{uid}", disabled=disable_merge, label_visibility="collapsed")
+                item['merge'] = is_merged # שמירת המצב
+                
+            # 3. מספר נספח (תצוגה)
             with cols[2]:
-                ph = "הקלד כותרת לנספח..." if item['type'] == 'divider' else "שם הקובץ"
-                item['title'] = st.text_input("hidden", item['title'], key=f"t_{uid}", label_visibility="collapsed", placeholder=ph)
-
+                st.markdown(f"<div style='text-align:center; font-weight:bold; color:#0d6efd;'>{display_num}</div>", unsafe_allow_html=True)
+                
+            # 4. שם הנספח (אינפוט)
             with cols[3]:
-                st.markdown('<div class="small-btn">', unsafe_allow_html=True)
+                item['title'] = st.text_input("hidden", item['title'], key=f"t_{uid}", label_visibility="collapsed", placeholder="הקלד שם לנספח...")
+                
+            # 5. שם הקובץ (טקסט)
+            with cols[4]:
+                ftype = item.get('ftype', 'PDF')
+                badge = "bg-word" if ftype=="WORD" else "bg-pdf"
+                st.markdown(f"<span class='badge {badge}'>{ftype}</span> <span style='color:#666; font-size:13px;'>{item['name']}</span>", unsafe_allow_html=True)
+                
+            # 6. מחיקה
+            with cols[5]:
+                st.markdown('<div class="icon-btn">', unsafe_allow_html=True)
                 if st.button("✕", key=f"del_{uid}"): to_del.append(i)
                 st.markdown('</div>', unsafe_allow_html=True)
             
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True) # סגירת שורה
 
+    # ביצוע שינויים
     if mv_up is not None:
         st.session_state.binder_files[mv_up], st.session_state.binder_files[mv_up-1] = st.session_state.binder_files[mv_up-1], st.session_state.binder_files[mv_up]
         st.rerun()
@@ -326,68 +325,162 @@ if st.session_state.binder_files:
     if to_del:
         for idx in sorted(to_del, reverse=True): del st.session_state.binder_files[idx]
         st.rerun()
-        
-    if st.button("נקה הכל"):
-        st.session_state.binder_files = []
-        st.rerun()
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    
+    # --- כפתור הפקה ---
     st.markdown('<div class="generate-btn">', unsafe_allow_html=True)
-    if st.button("🚀 הפק קלסר סופי"):
+    if st.button("🚀 הפק קלסר ושמור בדרייב"):
         status = st.empty(); bar = st.progress(0)
         try:
-            status.info("📥 מוריד וממיר קבצים...")
-            toc_data = []; temp_writer = PdfWriter(); curr_page = 2
-            curr_annex_num = 0; curr_annex_title = ""; annex_file_counter = 0
+            status.info("📥 מוריד ומעבד...")
+            
+            toc_data = []
+            intro_writer = PdfWriter() # מסמכי פתיחה (00)
+            annex_writer = PdfWriter() # נספחים
+            
+            curr_annex_num = 0
+            curr_annex_title = ""
+            annex_file_counter = 0
+            
+            # דגל: האם התחלנו כבר נספחים?
+            started_annexes = False
+            
+            # חישוב עמודים ראשוני (לצורך TOC)
+            # הנחה: TOC הוא עמוד אחד שנמצא אחרי מסמכי הפתיחה.
+            # נבנה את הכל תוך כדי תנועה.
+            
+            # שלב א': עיבוד לוגי של הרשימה
+            # צריך לדעת איזה קבצים שייכים לאיזה נספח
+            
+            # נחזיק שני "זרמים" של דפים: 
+            # 1. intro_pages (לפני הנספח הראשון)
+            # 2. annex_pages (החל מהנספח הראשון)
+            
             total = len(st.session_state.binder_files)
             
-            for idx, item in enumerate(st.session_state.binder_files):
-                bar.progress((idx/total)*0.8)
-                if item['type'] == 'divider':
-                    curr_annex_num += 1; curr_annex_title = item['title']; annex_file_counter = 0
-                    doc_start = curr_page + 1
-                    cover = html_to_pdf(generate_cover_html(curr_annex_num, item['title'], doc_start))
-                    if cover:
-                        for p in PdfReader(io.BytesIO(cover)).pages: temp_writer.add_page(p)
-                        curr_page += 1
-                    toc_data.append({"page": doc_start, "title": item['title'], "num": curr_annex_num})
-                else:
-                    # הורדה מותאמת (כולל המרה מוורד)
-                    fh = download_file_content(item['id'], item.get('mime', 'application/pdf'))
-                    
-                    if fh:
-                        if rename_source and curr_annex_num > 0:
-                            annex_file_counter += 1; ext = Path(item['name']).suffix
-                            base = f"נספח {curr_annex_num} - {curr_annex_title}"
-                            new_n = f"{base} ({annex_file_counter}){ext}" if annex_file_counter > 1 else f"{base}{ext}"
-                            try: 
-                                if item['name'] != new_n: rename_drive_file(item['id'], new_n)
-                            except: pass
-                        
-                        try:
-                            reader = PdfReader(fh)
-                            for p in reader.pages: temp_writer.add_page(p)
-                            curr_page += len(reader.pages)
-                        except:
-                            st.error(f"שגיאה בקובץ {item['name']}: הקובץ פגום או לא ניתן להמרה")
-                    else:
-                        st.warning(f"דילגתי על {item['name']} (המרה נכשלה)")
-
-            status.info("📑 בונה תוכן עניינים...")
-            toc = html_to_pdf(generate_toc_html(toc_data))
-            final_w = PdfWriter()
-            if toc:
-                for p in PdfReader(io.BytesIO(toc)).pages: final_w.add_page(p)
+            # משתנה עזר לחישוב עמודים בזמן אמת
+            # נתחיל לספור עמודים. נניח TOC = 1.
+            # אבל אנחנו לא יודעים כמה עמודים יש בכל קובץ עד שמורידים אותו.
             
-            bio = io.BytesIO(); temp_writer.write(bio); bio.seek(0)
-            for p in PdfReader(bio).pages: final_w.add_page(p)
+            temp_intro_files = []
+            temp_annex_blocks = [] # רשימה של (כותרת, [קבצים])
+            
+            current_block_files = []
+            current_block_title = ""
+            
+            # 1. מיון לוגי
+            for item in st.session_state.binder_files:
+                is_merged = item.get('merge', False)
+                title = item['title'].strip()
+                
+                # אם זה קובץ חדש (לא ממוזג) ויש לו כותרת -> נספח חדש
+                if not is_merged and title:
+                    # אם היינו באמצע בלוק קודם, נשמור אותו
+                    if current_block_title:
+                        temp_annex_blocks.append((current_block_title, current_block_files))
+                    
+                    # התחלת בלוק חדש
+                    current_block_title = title
+                    current_block_files = [item]
+                    started_annexes = True
+                    
+                # אם זה לא ממוזג ואין כותרת -> זה מסמך פתיחה (אם עוד לא התחלנו נספחים)
+                elif not is_merged and not title:
+                    if not started_annexes:
+                        temp_intro_files.append(item)
+                    else:
+                        # מקרה קצה: שורה ריקה באמצע נספחים? נתייחס כהמשך או הפרדה?
+                        # בלוגיקה של לוג'יק, זה בדרך כלל אומר הפרדה.
+                        # בוא נצמיד את זה לנספח האחרון כרגע.
+                        current_block_files.append(item)
+                
+                # אם זה ממוזג -> מצטרף לבלוק הנוכחי
+                elif is_merged:
+                    if started_annexes:
+                        current_block_files.append(item)
+                    else:
+                        # מיזוג במסמכי פתיחה? סבבה.
+                        temp_intro_files.append(item)
+
+            # שמירת הבלוק האחרון
+            if current_block_title:
+                temp_annex_blocks.append((current_block_title, current_block_files))
+            
+            # 2. הורדה ואיחוד
+            global_page_counter = 1
+            
+            # א. מסמכי פתיחה
+            for f in temp_intro_files:
+                fh = download_file_content(f['id'], f.get('mime', 'application/pdf'))
+                if fh:
+                    r = PdfReader(fh)
+                    for p in r.pages: intro_writer.add_page(p)
+                    global_page_counter += len(r.pages)
+            
+            # ב. תוכן עניינים (שריון מקום)
+            # נניח שהוא עמוד אחד
+            toc_page_location = global_page_counter
+            global_page_counter += 1 
+            
+            # ג. נספחים
+            for idx, (title, files) in enumerate(temp_annex_blocks):
+                annex_num = idx + 1
+                
+                # יצירת שער
+                # השער הוא בעמוד הנוכחי. המסמך מתחיל בעמוד הבא.
+                doc_start = global_page_counter + 1
+                
+                cover = html_to_pdf(generate_cover_html(annex_num, title, doc_start))
+                if cover:
+                    cr = PdfReader(io.BytesIO(cover))
+                    for p in cr.pages: annex_writer.add_page(p)
+                    global_page_counter += len(cr.pages)
+                
+                # רישום ל-TOC (מפנה לעמוד השער)
+                toc_data.append({"num": annex_num, "title": title, "page": doc_start - 1})
+                
+                # קבצי הנספח
+                file_sub_counter = 0
+                for f in files:
+                    file_sub_counter += 1
+                    fh = download_file_content(f['id'], f.get('mime', 'application/pdf'))
+                    if fh:
+                        # שינוי שם בדרייב (רק אם התבקש)
+                        if rename_source:
+                            ext = Path(f['name']).suffix
+                            base = f"נספח {annex_num} - {title}"
+                            new_n = f"{base} ({file_sub_counter}){ext}" if file_sub_counter > 1 else f"{base}{ext}"
+                            try: 
+                                if f['name'] != new_n: rename_drive_file(f['id'], new_n)
+                            except: pass
+                            
+                        r = PdfReader(fh)
+                        for p in r.pages: annex_writer.add_page(p)
+                        global_page_counter += len(r.pages)
+
+            # 3. הרכבה סופית
+            status.info("📑 בונה קובץ סופי...")
+            final_w = PdfWriter()
+            
+            # הוספת פתיחה
+            bio_intro = io.BytesIO(); intro_writer.write(bio_intro); bio_intro.seek(0)
+            if len(intro_writer.pages)>0:
+                for p in PdfReader(bio_intro).pages: final_w.add_page(p)
+                
+            # הוספת TOC
+            toc_bytes = html_to_pdf(generate_toc_html(toc_data))
+            if toc_bytes:
+                for p in PdfReader(io.BytesIO(toc_bytes)).pages: final_w.add_page(p)
+                
+            # הוספת נספחים
+            bio_annex = io.BytesIO(); annex_writer.write(bio_annex); bio_annex.seek(0)
+            if len(annex_writer.pages)>0:
+                for p in PdfReader(bio_annex).pages: final_w.add_page(p)
+                
             merged = io.BytesIO(); final_w.write(merged)
             
-            status.info("🔢 ממספר ודוחס...")
+            status.info("🔢 ממספר, דוחס ומעלה...")
             res = compress_if_needed(add_footer_numbers(merged.getvalue()))
             
-            status.info("☁️ מעלה לדרייב...")
             try:
                 upload_final_pdf(st.session_state.folder_id, res, f"{final_name}.pdf")
                 bar.progress(100)
@@ -396,5 +489,6 @@ if st.session_state.binder_files:
             except Exception as e:
                 status.warning(f"העלאה נכשלה ({e}). הורד ידנית:")
                 st.download_button("📥 הורד", res, f"{final_name}.pdf")
+                
         except Exception as e: st.error(f"שגיאה: {e}")
     st.markdown('</div>', unsafe_allow_html=True)
