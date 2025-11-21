@@ -14,7 +14,7 @@ from reportlab.lib.units import mm
 from tempfile import NamedTemporaryFile
 
 # ==========================================
-# 1. עיצוב CSS - טבלה נקייה וצפופה
+# 1. עיצוב CSS
 # ==========================================
 st.set_page_config(page_title="מערכת איגוד מסמכים", layout="wide")
 
@@ -39,7 +39,7 @@ st.markdown("""
     .data-row {
         display: flex;
         border-bottom: 1px solid #f1f1f1;
-        padding: 6px 0;
+        padding: 8px 0;
         align-items: center;
         transition: background 0.1s;
     }
@@ -82,6 +82,7 @@ st.markdown("""
     
     /* מספר נספח */
     .annex-num { font-weight: bold; color: #0d6efd; font-size: 16px; text-align: center; }
+    .main-icon { font-size: 18px; text-align: center; }
     
 </style>
 """, unsafe_allow_html=True)
@@ -94,7 +95,7 @@ if 'binder_files' not in st.session_state or not isinstance(st.session_state.bin
 if 'folder_id' not in st.session_state: st.session_state.folder_id = None
 
 # ==========================================
-# 3. מנוע גוגל דרייב (המתוקן)
+# 3. מנוע גוגל דרייב
 # ==========================================
 def get_drive_service():
     try:
@@ -111,7 +112,6 @@ def list_files_from_drive(folder_link):
     service = get_drive_service()
     if not service: return None, "שגיאת חיבור"
     try:
-        # שאילתה רחבה: PDF, Word, וכל סוגי Google Docs
         query = (f"'{fid}' in parents and trashed=false and "
                  f"(mimeType='application/pdf' or "
                  f"mimeType contains 'application/vnd.google-apps' or "
@@ -143,28 +143,17 @@ def convert_word_to_pdf(input_bytes):
 def download_file_content(file_id, mime_type):
     service = get_drive_service()
     fh = io.BytesIO()
-    
-    # --- התיקון: זיהוי חכם יותר ---
-    
-    # 1. כל קבצי גוגל (דוקס, שיטס, סליידס) -> Export
     if 'vnd.google-apps' in mime_type:
-        # ברירת מחדל ל-PDF
         request = service.files().export_media(fileId=file_id, mimeType='application/pdf')
-        
-    # 2. כל השאר (PDF, WORD) -> Download
     else:
         request = service.files().get_media(fileId=file_id)
     
-    # ביצוע ההורדה
-    downloader = MediaIoBaseDownload(fh, request)
-    done = False
+    downloader = MediaIoBaseDownload(fh, request); done = False
     while done is False: _, done = downloader.next_chunk()
     fh.seek(0)
     
-    # אם זה וורד שהורדנו -> המרה ל-PDF
     if 'word' in mime_type or 'document' in mime_type:
         return convert_word_to_pdf(fh.getvalue())
-        
     return fh
 
 def upload_final_pdf(folder_id, pdf_bytes, name):
@@ -193,13 +182,13 @@ def generate_cover_html(annex_num, title, doc_start_page):
 def generate_toc_html(rows):
     html_rows = ""
     for r in rows:
-        num_display = f"נספח {r['num']}" if r['num'] else "---"
+        num_display = f"נספח {r['num']}"
         html_rows += f"<tr><td style='text-align:center;font-weight:bold;'>{num_display}</td><td style='text-align:right;padding-right:10px;'>{r['title']}</td><td style='text-align:center;'>{r['page']}</td></tr>"
     return f"""<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><style>
     body{{font-family:'DejaVu Sans';padding:40px;}}h1{{text-align:center;font-size:45px;font-weight:bold;margin-bottom:30px;}}
     table{{width:100%;border-collapse:collapse;border:2px solid black;}}th,td{{border:1px solid black;padding:10px;font-size:18px;}}
     th{{background:#fff;font-weight:bold;font-size:20px;text-align:center;border-bottom:2px solid black;}}</style></head><body>
-    <h1>תוכן עניינים</h1><table><thead><tr><th style="width:20%">סוג/מספר</th><th style="width:65%">שם המסמך</th><th style="width:15%">עמוד</th></tr></thead><tbody>{html_rows}</tbody></table></body></html>"""
+    <h1>תוכן עניינים לנספחים</h1><table><thead><tr><th style="width:20%">סוג/מספר</th><th style="width:65%">שם הנספח</th><th style="width:15%">עמוד</th></tr></thead><tbody>{html_rows}</tbody></table></body></html>"""
 
 def html_to_pdf(html):
     try:
@@ -265,7 +254,6 @@ with st.container():
 if st.session_state.binder_files:
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # כותרות הטבלה המעודכנת עם כוכב ראשי
     st.markdown("""
     <div class="table-header">
         <div style="width:5%; text-align:center;">מחק</div>
@@ -292,7 +280,7 @@ if st.session_state.binder_files:
         if is_main:
             row_style = "row-main"
             display_num = "⭐"
-            item['merge'] = False
+            item['merge'] = False 
         elif is_merged:
             row_style = "row-merged"
             display_num = "🔗"
@@ -305,8 +293,6 @@ if st.session_state.binder_files:
 
         with st.container():
             st.markdown(f'<div class="data-row {row_style}">', unsafe_allow_html=True)
-            
-            # סדר עמודות מימין לשמאל במסך (בקוד משמאל לימין: 0 הוא ימין ב-RTL)
             cols = st.columns([0.5, 0.8, 0.5, 0.5, 0.5, 4.2, 3.5])
             
             # 0. מחק
@@ -368,52 +354,41 @@ if st.session_state.binder_files:
         try:
             status.info("📥 מוריד ומעבד...")
             
-            # --- לוגיקת בניית הבלוקים (מעודכנת) ---
+            # --- בניית בלוקים ---
             blocks = []; current_block = []
-            
             for item in st.session_state.binder_files:
                 is_main = item.get('is_main', False)
                 is_merged = item.get('merge', False)
-                
-                # מתי מתחילים בלוק חדש?
-                # אם זה "ראשי" -> תמיד בלוק חדש.
-                # אם זה נספח חדש (לא ממוזג) -> בלוק חדש.
                 start_new = is_main or (not is_merged)
-                
                 if start_new:
                     if current_block: blocks.append(current_block)
                     current_block = [item]
-                else:
-                    current_block.append(item)
-            
+                else: current_block.append(item)
             if current_block: blocks.append(current_block)
             
             # --- עיבוד ---
-            processed_blocks = []
+            processed_blocks = [] 
+            real_annex_counter = 0
             total_items = len(st.session_state.binder_files)
             prog = 0
-            real_annex_counter = 0
             
             for block in blocks:
                 head = block[0]
                 is_main = head.get('is_main', False)
                 title = head['title'].strip()
+                block_writer = PdfWriter()
                 
                 if not is_main: real_annex_counter += 1
-                
-                block_writer = PdfWriter()
                 sub_count = 0
                 
                 for f in block:
                     prog += 1; bar.progress((prog/total_items)*0.8)
                     fh = download_file_content(f['id'], f.get('mime', 'application/pdf'))
-                    
                     if fh:
                         try:
                             r = PdfReader(fh)
                             for p in r.pages: block_writer.add_page(p)
                             
-                            # שינוי שם בדרייב
                             if rename_source and not is_main:
                                 sub_count += 1
                                 ext = Path(f['name']).suffix
@@ -434,80 +409,80 @@ if st.session_state.binder_files:
 
             # --- הרכבה ו-TOC ---
             status.info("📑 בונה תוכן עניינים...")
-            
-            # חישוב מיקום TOC
-            main_pages_count = sum(b['page_count'] for b in processed_blocks if b['is_main'])
-            toc_start_page = main_pages_count + 1
-            
-            # הנחה: TOC הוא עמוד 1 (אלא אם יש המון נספחים)
-            toc_length = 1
-            
             toc_data = []
             
-            # מעבר להרכבת הנתונים ל-TOC
-            # עבור ראשיים: העמוד הוא המיקום הרץ
-            # עבור נספחים: העמוד הוא המיקום הרץ + TOC length (כי הם אחרי ה-TOC)
+            # 1. חישוב מיקום התחלה של TOC (אחרי כל הראשיים)
+            main_pages_count = sum(b['page_count'] for b in processed_blocks if b['is_main'])
             
-            current_page_tracker = 1
+            # הערכת גודל TOC (נניח עמוד 1)
+            toc_length = 1
             
-            # 1. ראשיים
-            for blk in processed_blocks:
-                if blk['is_main']:
-                    toc_data.append({"num": "", "title": blk['title'], "page": current_page_tracker})
-                    current_page_tracker += blk['page_count']
-                else:
-                    break # סיימנו ראשיים בהתחלה
+            # מונה רץ עבור המיקומים ב-TOC
+            # נספח 1 מתחיל ב: סך עמודי ראשיים + עמוד TOC + 1 (כי יש שער לנספח 1)
+            # כלומר: העמוד שבו *המסמך* מתחיל.
             
-            # מוסיפים את אורך ה-TOC למונה
-            current_page_tracker += toc_length
+            # המונה יתחיל לרוץ אחרי הראשיים וה-TOC
+            running_page_after_toc = main_pages_count + toc_length + 1 
             
-            # 2. נספחים
+            # בונים את המידע לטבלה
             for blk in processed_blocks:
                 if not blk['is_main']:
-                    doc_start = current_page_tracker + 1 # +1 לשער
-                    toc_data.append({"num": blk['annex_num'], "title": blk['title'], "page": doc_start - 1}) # עמוד השער
-                    current_page_tracker += 1 + blk['page_count'] # שער + מסמך
+                    # זה נספח
+                    # הוא מתחיל ב-running_page_after_toc (שזה השער)
+                    # המסמך עצמו מתחיל ב running_page_after_toc + 1
+                    
+                    doc_start_page = running_page_after_toc + 1
+                    
+                    toc_data.append({
+                        "num": blk['annex_num'], 
+                        "title": blk['title'], 
+                        "page": running_page_after_toc # בתוכן עניינים מציינים את עמוד השער
+                    })
+                    
+                    # מקדמים את המונה: שער (1) + דפי המסמך
+                    running_page_after_toc += 1 + blk['page_count']
 
-            # יצירת TOC
             toc_bytes = html_to_pdf(generate_toc_html(toc_data))
             
-            # איחוד פיזי
+            # --- איחוד פיזי ---
             master = PdfWriter()
             
-            # א. הוספת ראשיים (שבהתחלה)
+            # א. הוספת ראשיים
             for blk in processed_blocks:
                 if blk['is_main']:
                     temp = io.BytesIO(); blk['writer'].write(temp); temp.seek(0)
                     br = PdfReader(temp)
                     for p in br.pages: master.add_page(p)
-                else: break # עוצרים כשמגיעים לנספחים
             
             # ב. הוספת TOC
             if toc_bytes:
                 tr = PdfReader(io.BytesIO(toc_bytes))
                 for p in tr.pages: master.add_page(p)
                 
-            # ג. הוספת נספחים (עם שערים)
+            # ג. הוספת נספחים
+            # אנחנו צריכים לחשב מחדש את מספר העמוד שיופיע על השער
+            # מספר העמוד בשער צריך להיות: העמוד הנוכחי + 1 + 1 (לא, רגע)
+            # אם אני בעמוד 10 (שער), המסמך מתחיל ב-11. בשער כתוב "עמוד 11".
+            
+            # נשתמש במונה מדויק תוך כדי בנייה
+            current_pdf_page = len(master.pages) + 1
+            
             for blk in processed_blocks:
                 if not blk['is_main']:
-                    # שער
-                    # שים לב: המספר שכתוב על השער הוא העמוד *הבא* (תחילת המסמך)
-                    # אנחנו צריכים לחשב אותו שוב? לא, יש לנו את הלוגיקה.
-                    # העמוד הנוכחי של המאסטר הוא איפה שהשער ייכנס.
-                    # המסמך יתחיל ב (len(master.pages) + 1) + 1
+                    # אנחנו בעמוד השער. המסמך יתחיל בעמוד הבא.
+                    target_doc_page = current_pdf_page + 1
                     
-                    target_page_num = len(master.pages) + 2
-                    cover = html_to_pdf(generate_cover_html(blk['annex_num'], blk['title'], target_page_num))
+                    cover = html_to_pdf(generate_cover_html(blk['annex_num'], blk['title'], target_doc_page))
                     if cover:
                         cr = PdfReader(io.BytesIO(cover))
                         for p in cr.pages: master.add_page(p)
+                        current_pdf_page += 1
                     
-                    # מסמך
                     temp = io.BytesIO(); blk['writer'].write(temp); temp.seek(0)
                     br = PdfReader(temp)
                     for p in br.pages: master.add_page(p)
+                    current_pdf_page += len(br.pages)
 
-            # סיום
             out_io = io.BytesIO(); master.write(out_io)
             
             status.info("🔢 מסיים...")
