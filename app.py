@@ -12,7 +12,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
 
 # ==========================================
-# 1. עיצוב CSS - טבלאי, נקי, אקסלי
+# 1. עיצוב CSS - נקי ופשוט (כמו לוג'יק)
 # ==========================================
 st.set_page_config(page_title="מערכת איגוד מסמכים", layout="wide")
 
@@ -23,86 +23,71 @@ st.markdown("""
     .stApp { background-color: #ffffff; direction: rtl; font-family: 'Heebo', sans-serif; }
     
     /* כותרות */
-    h1 { font-size: 24px; font-weight: bold; border-bottom: 1px solid #ddd; padding-bottom: 10px; margin-bottom: 20px; color: #333; }
-    h3 { font-size: 18px; font-weight: bold; color: #555; margin-bottom: 10px; }
-
-    /* --- מבנה הטבלה --- */
+    h1 { color: #1a2a40; text-align: center; font-weight: bold; border-bottom: 2px solid #eee; padding-bottom: 10px; }
     
-    /* כותרת הטבלה */
+    /* שורת כותרת בטבלה */
     .table-header {
-        background-color: #f8f9fa;
-        border: 1px solid #dee2e6;
-        padding: 8px;
+        background-color: #f1f3f5;
+        padding: 10px;
         font-weight: bold;
         color: #495057;
-        display: flex;
-        align-items: center;
-    }
-    
-    /* שורת נספח (כחול לוג'יק) */
-    .divider-row {
-        background-color: #e3f2fd;
-        border: 1px solid #90caf9;
-        border-top: none; /* כדי שייראה מחובר */
-        padding: 5px;
-        display: flex;
-        align-items: center;
-    }
-    
-    /* שורת קובץ (לבן) */
-    .file-row {
-        background-color: #ffffff;
+        border-radius: 4px;
+        margin-bottom: 10px;
         border: 1px solid #dee2e6;
-        border-top: none;
-        padding: 5px;
-        display: flex;
-        align-items: center;
     }
     
-    /* --- אלמנטים בתוך הטבלה --- */
+    /* שורת חוצץ (שער נספח) */
+    .divider-row {
+        background-color: #e7f5ff; /* כחול בהיר מאוד */
+        border: 1px solid #a5d8ff;
+        padding: 8px;
+        border-radius: 4px;
+        margin-bottom: 4px;
+    }
     
-    /* כפתורי פעולה קטנים */
+    /* שורת קובץ */
+    .file-row {
+        background-color: #fff;
+        border-bottom: 1px solid #eee;
+        padding: 8px;
+    }
+    
+    /* כפתורים קטנים */
     .small-btn button {
-        padding: 0px 6px !important;
-        font-size: 12px !important;
-        min-height: 24px !important;
-        height: 24px !important;
+        padding: 0px 8px !important;
+        font-size: 14px !important;
         border: 1px solid #ced4da !important;
-        background: #fff !important;
-        color: #333 !important;
-        margin: 0 1px !important;
+        background: white !important;
+        color: #495057 !important;
+        margin: 0 2px !important;
     }
-    .small-btn button:hover { background: #e9ecef !important; }
-    
-    /* אינפוטים בתוך הטבלה - שייראו שטוחים */
-    .stTextInput input {
-        padding: 4px 8px;
-        font-size: 14px;
-        height: 30px;
-        min-height: 30px;
-        border: 1px solid #ced4da;
-        background-color: white;
+    .small-btn button:hover {
+        background: #f8f9fa !important;
     }
     
-    /* כפתור הוספת נספח */
+    /* כפתור הוספה */
     .add-btn button {
-        background-color: #f1f3f5 !important;
-        color: #0d6efd !important;
-        border: 1px dashed #0d6efd !important;
+        background-color: #e9ecef !important;
+        color: #495057 !important;
+        border: 1px dashed #adb5bd !important;
         width: 100%;
-        margin-top: 10px;
+        font-weight: bold;
+    }
+
+    /* כפתור הפקה ירוק */
+    .generate-btn button {
+        background-color: #27ae60 !important;
+        color: white !important;
+        font-size: 20px !important;
+        width: 100%;
+        padding: 12px !important;
         font-weight: bold;
     }
     
-    /* כפתור הפקה */
-    .generate-btn button {
-        background-color: #198754 !important; /* ירוק כהה */
-        color: white !important;
-        font-size: 18px !important;
-        font-weight: bold;
-        width: 100%;
-        padding: 10px !important;
-        margin-top: 20px;
+    /* אינפוטים */
+    .stTextInput input {
+        padding: 5px;
+        font-size: 14px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -115,7 +100,7 @@ if 'binder_files' not in st.session_state or not isinstance(st.session_state.bin
 if 'folder_id' not in st.session_state: st.session_state.folder_id = None
 
 # ==========================================
-# 3. מנוע גוגל דרייב
+# 3. מנוע גוגל דרייב (מעודכן לכוננים משותפים)
 # ==========================================
 def get_drive_service():
     try:
@@ -138,7 +123,14 @@ def list_files_from_drive(folder_link):
     service = get_drive_service()
     if not service: return None, []
     try:
-        results = service.files().list(q=f"'{fid}' in parents and mimeType='application/pdf' and trashed=false", fields="files(id, name)", orderBy="name").execute()
+        # תיקון: הוספת תמיכה בכוננים משותפים (supportsAllDrives + includeItemsFromAllDrives)
+        results = service.files().list(
+            q=f"'{fid}' in parents and mimeType='application/pdf' and trashed=false",
+            fields="files(id, name)", 
+            orderBy="name",
+            supportsAllDrives=True, 
+            includeItemsFromAllDrives=True
+        ).execute()
         return fid, results.get('files', [])
     except: return None, []
 
@@ -153,15 +145,18 @@ def upload_final_pdf(folder_id, pdf_bytes, name):
     service = get_drive_service()
     meta = {'name': name, 'parents': [folder_id]}
     media = MediaIoBaseUpload(io.BytesIO(pdf_bytes), mimetype='application/pdf')
-    service.files().create(body=meta, media_body=media).execute()
+    # תיקון: הוספת supportsAllDrives=True להעלאה
+    service.files().create(body=meta, media_body=media, supportsAllDrives=True).execute()
 
 def rename_drive_file(file_id, new_name):
     service = get_drive_service()
-    service.files().update(fileId=file_id, body={'name': new_name}).execute()
+    # תיקון: הוספת supportsAllDrives=True לשינוי שם
+    service.files().update(fileId=file_id, body={'name': new_name}, supportsAllDrives=True).execute()
 
 # ==========================================
 # 4. מנוע PDF
 # ==========================================
+
 def get_page_count(fh):
     try: return len(PdfReader(fh).pages)
     except: return 0
@@ -219,20 +214,14 @@ def compress_if_needed(pdf_bytes):
 
 st.markdown("<h1>מערכת איגוד מסמכים</h1>", unsafe_allow_html=True)
 
-# חלוקה ראשית: ימין (הגדרות) - שמאל (טבלה)
-# יחס של 1 ל-3 (הטבלה צריכה מקום)
-col_settings, col_table = st.columns([1, 3.5], gap="large")
-
-# --- צד ימין: הגדרות ---
-with col_settings:
-    st.markdown("### ⚙️ הגדרות")
-    link = st.text_input("לינק לתיקייה:", placeholder="הדבק כאן...")
-    final_name = st.text_input("שם קובץ סופי:", "קלסר_נספחים")
-    rename_source = st.checkbox("סדר שמות קבצים")
+# --- הגדרות עליונות ---
+with st.container():
+    c1, c2, c3, c4 = st.columns([3, 1.5, 1, 1])
+    link = c1.text_input("לינק לתיקייה בדרייב:", placeholder="הדבק כאן...", label_visibility="collapsed")
+    final_name = c2.text_input("שם קובץ", "קלסר_נספחים", label_visibility="collapsed")
+    rename_source = c3.checkbox("סדר שמות")
     
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    if st.button("📥 משוך קבצים", use_container_width=True):
+    if c4.button("📥 משוך"):
         if link:
             fid, files = list_files_from_drive(link)
             if fid and files:
@@ -244,144 +233,128 @@ with col_settings:
                         "title": f['name'], "key": f['id']
                     })
                 st.rerun()
-            else: st.error("שגיאה בקישור")
-            
-    if st.session_state.binder_files:
-        st.markdown("<br><hr>", unsafe_allow_html=True)
-        if st.button("נקה הכל"):
-            st.session_state.binder_files = []
-            st.rerun()
 
-# --- צד שמאל: טבלת עריכה ---
-with col_table:
-    st.markdown("### 📝 רשימת מסמכים")
+# --- טבלת העבודה ---
+if st.session_state.binder_files:
     
-    if not st.session_state.binder_files:
-        st.info("הדבק לינק בצד ימין והתחל לעבוד.")
+    st.markdown('<div class="add-btn">', unsafe_allow_html=True)
+    if st.button("➕ הוסף שער נספח חדש"):
+        st.session_state.binder_files.append({"type": "divider", "title": "", "key": f"div_{len(st.session_state.binder_files)}"})
+        st.rerun()
+    st.markdown('</div><br>', unsafe_allow_html=True)
     
-    else:
-        # כותרות הטבלה (Header)
-        st.markdown("""
-        <div class="table-header">
-            <div style="width:12%; text-align:center;">סדר</div>
-            <div style="width:10%; text-align:center;">סוג</div>
-            <div style="width:73%;">שם הקובץ / כותרת הנספח</div>
-            <div style="width:5%; text-align:center;">מחק</div>
-        </div>
-        """, unsafe_allow_html=True)
+    # כותרות טבלה
+    st.markdown("""
+    <div class="table-header">
+        <div style="display:inline-block; width:12%;">פעולות</div>
+        <div style="display:inline-block; width:10%;">סוג</div>
+        <div style="display:inline-block; width:70%;">שם / כותרת</div>
+        <div style="display:inline-block; width:5%;">מחק</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    mv_up = None; mv_dn = None; to_del = []
+    
+    for i, item in enumerate(st.session_state.binder_files):
         
-        to_del = []; mv_up = None; mv_dn = None
+        row_class = "divider-row" if item['type'] == 'divider' else "file-row"
         
-        for i, item in enumerate(st.session_state.binder_files):
-            # קביעת סוג שורה
-            row_class = "divider-row" if item['type'] == 'divider' else "file-row"
+        with st.container():
+            st.markdown(f'<div class="{row_class}">', unsafe_allow_html=True)
+            cols = st.columns([1.2, 1, 7, 0.5])
             
-            with st.container():
-                st.markdown(f'<div class="{row_class}">', unsafe_allow_html=True)
-                cols = st.columns([1.2, 1, 7, 0.5])
-                
-                # עמודה 1: כפתורי הזזה
-                with cols[0]:
-                    st.markdown('<div class="small-btn">', unsafe_allow_html=True)
-                    c_u, c_d = st.columns(2)
-                    if i>0 and c_u.button("▲", key=f"u{i}"): mv_up=i
-                    if i<len(st.session_state.binder_files)-1 and c_d.button("▼", key=f"d{i}"): mv_dn=i
-                    st.markdown('</div>', unsafe_allow_html=True)
-                
-                # עמודה 2: סוג
-                with cols[1]:
-                    if item['type'] == 'divider': st.markdown("<b>🟦 נספח</b>", unsafe_allow_html=True)
-                    else: st.markdown("📄 קובץ", unsafe_allow_html=True)
-                
-                # עמודה 3: תוכן (עריכה)
-                with cols[2]:
-                    # שדה עריכה זהה לשניהם
-                    ph = "שם הנספח..." if item['type'] == 'divider' else "שם הקובץ..."
-                    item['title'] = st.text_input("h", item['title'], key=f"t{i}", label_visibility="collapsed", placeholder=ph)
-
-                # עמודה 4: מחיקה
-                with cols[3]:
-                    st.markdown('<div class="small-btn">', unsafe_allow_html=True)
-                    if st.button("✕", key=f"del{i}"): to_del.append(i)
-                    st.markdown('</div>', unsafe_allow_html=True)
-                    
+            with cols[0]:
+                st.markdown('<div class="small-btn">', unsafe_allow_html=True)
+                c_u, c_d = st.columns(2)
+                if i>0 and c_u.button("▲", key=f"u{i}"): mv_up=i
+                if i<len(st.session_state.binder_files)-1 and c_d.button("▼", key=f"d{i}"): mv_dn=i
                 st.markdown('</div>', unsafe_allow_html=True)
+            
+            with cols[1]:
+                if item['type'] == 'divider': st.markdown("<b>🟦 נספח</b>", unsafe_allow_html=True)
+                else: st.markdown("📄 קובץ", unsafe_allow_html=True)
+            
+            with cols[2]:
+                # אינפוט עריכה (גם לשער וגם לקובץ)
+                ph = "הקלד כותרת לנספח..." if item['type'] == 'divider' else "שם הקובץ..."
+                item['title'] = st.text_input("hidden", item['title'], key=f"t{i}", label_visibility="collapsed", placeholder=ph)
 
-        # לוגיקה
-        if mv_up is not None:
-            st.session_state.binder_files[mv_up], st.session_state.binder_files[mv_up-1] = st.session_state.binder_files[mv_up-1], st.session_state.binder_files[mv_up]
-            st.rerun()
-        if mv_dn is not None:
-            st.session_state.binder_files[mv_dn], st.session_state.binder_files[mv_dn+1] = st.session_state.binder_files[mv_dn+1], st.session_state.binder_files[mv_dn]
-            st.rerun()
-        if to_del:
-            for idx in sorted(to_del, reverse=True): del st.session_state.binder_files[idx]
-            st.rerun()
-
-        # כפתור הוספה
-        st.markdown('<div class="add-btn">', unsafe_allow_html=True)
-        if st.button("➕ הוסף שער נספח חדש"):
-            st.session_state.binder_files.append({"type": "divider", "title": "", "key": f"div_{len(st.session_state.binder_files)}"})
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        # כפתור הפקה
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown('<div class="generate-btn">', unsafe_allow_html=True)
-        if st.button("🚀 הפק קלסר ושמור בדרייב"):
-            status = st.empty(); bar = st.progress(0)
-            try:
-                status.info("📥 מוריד קבצים...")
-                toc_data = []; temp_writer = PdfWriter(); curr_page = 2
-                curr_annex_num = 0; curr_annex_title = ""; annex_file_counter = 0
-                total = len(st.session_state.binder_files)
+            with cols[3]:
+                st.markdown('<div class="small-btn">', unsafe_allow_html=True)
+                if st.button("✕", key=f"del{i}"): to_del.append(i)
+                st.markdown('</div>', unsafe_allow_html=True)
                 
-                for idx, item in enumerate(st.session_state.binder_files):
-                    bar.progress((idx/total)*0.8)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+    if mv_up is not None:
+        st.session_state.binder_files[mv_up], st.session_state.binder_files[mv_up-1] = st.session_state.binder_files[mv_up-1], st.session_state.binder_files[mv_up]
+        st.rerun()
+    if mv_dn is not None:
+        st.session_state.binder_files[mv_dn], st.session_state.binder_files[mv_dn+1] = st.session_state.binder_files[mv_dn+1], st.session_state.binder_files[mv_dn]
+        st.rerun()
+    if to_del:
+        for idx in sorted(to_del, reverse=True): del st.session_state.binder_files[idx]
+        st.rerun()
+        
+    if st.button("נקה הכל"):
+        st.session_state.binder_files = []
+        st.rerun()
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    st.markdown('<div class="generate-btn">', unsafe_allow_html=True)
+    if st.button("🚀 הפק קלסר סופי"):
+        status = st.empty(); bar = st.progress(0)
+        try:
+            status.info("📥 מוריד קבצים...")
+            toc_data = []; temp_writer = PdfWriter(); curr_page = 2
+            curr_annex_num = 0; curr_annex_title = ""; annex_file_counter = 0
+            total = len(st.session_state.binder_files)
+            
+            for idx, item in enumerate(st.session_state.binder_files):
+                bar.progress((idx/total)*0.8)
+                
+                if item['type'] == 'divider':
+                    curr_annex_num += 1; curr_annex_title = item['title']; annex_file_counter = 0
+                    doc_start = curr_page + 1
+                    cover = html_to_pdf(generate_cover_html(curr_annex_num, item['title'], doc_start))
+                    if cover:
+                        for p in PdfReader(io.BytesIO(cover)).pages: temp_writer.add_page(p)
+                        curr_page += 1
+                    toc_data.append({"page": doc_start, "title": item['title'], "num": curr_annex_num})
                     
-                    if item['type'] == 'divider':
-                        curr_annex_num += 1; curr_annex_title = item['title']; annex_file_counter = 0
-                        doc_start = curr_page + 1
-                        cover = html_to_pdf(generate_cover_html(curr_annex_num, item['title'], doc_start))
-                        if cover:
-                            for p in PdfReader(io.BytesIO(cover)).pages: temp_writer.add_page(p)
-                            curr_page += 1
-                        toc_data.append({"page": doc_start, "title": item['title'], "num": curr_annex_num})
-                        
-                    else:
-                        fh = download_file_content(item['id'])
-                        if rename_source and curr_annex_num > 0:
-                            annex_file_counter += 1; ext = Path(item['name']).suffix
-                            base = f"נספח {curr_annex_num} - {curr_annex_title}"
-                            new_n = f"{base} ({annex_file_counter}){ext}" if annex_file_counter > 1 else f"{base}{ext}"
-                            try: 
-                                if item['name'] != new_n: rename_drive_file(item['id'], new_n)
-                            except: pass
-                        reader = PdfReader(fh)
-                        for p in reader.pages: temp_writer.add_page(p)
-                        curr_page += len(reader.pages)
+                else:
+                    fh = download_file_content(item['id'])
+                    if rename_source and curr_annex_num > 0:
+                        annex_file_counter += 1; ext = Path(item['name']).suffix
+                        base = f"נספח {curr_annex_num} - {curr_annex_title}"
+                        new_n = f"{base} ({annex_file_counter}){ext}" if annex_file_counter > 1 else f"{base}{ext}"
+                        try: 
+                            if item['name'] != new_n: rename_drive_file(item['id'], new_n)
+                        except: pass
+                    reader = PdfReader(fh)
+                    for p in reader.pages: temp_writer.add_page(p)
+                    curr_page += len(reader.pages)
 
-                status.info("📑 מסיים עריכה...")
-                toc = html_to_pdf(generate_toc_html(toc_data))
-                final = PdfWriter()
-                if toc: 
-                    for p in PdfReader(io.BytesIO(toc)).pages: final.add_page(p)
-                
-                bio = io.BytesIO(); temp_writer.write(bio); bio.seek(0)
-                for p in PdfReader(bio).pages: final.add_page(p)
-                merged = io.BytesIO(); final.write(merged)
-                
-                status.info("🔢 דוחס ומעלה...")
-                res = compress_if_needed(add_footer_numbers(merged.getvalue()))
-                
-                try:
-                    upload_final_pdf(st.session_state.folder_id, res, f"{final_name}.pdf")
-                    bar.progress(100)
-                    st.balloons()
-                    status.success(f"✅ בוצע! הקובץ מחכה בתיקייה.")
-                except:
-                    status.warning("לא הצלחתי לשמור בדרייב. הורד ידנית:")
-                    st.download_button("📥 הורד", res, f"{final_name}.pdf")
-                    
-            except Exception as e: st.error(f"שגיאה: {e}")
-        st.markdown('</div>', unsafe_allow_html=True)
+            status.info("📑 בונה תוכן עניינים...")
+            toc = html_to_pdf(generate_toc_html(toc_data))
+            final_w = PdfWriter()
+            if toc:
+                for p in PdfReader(io.BytesIO(toc)).pages: final_w.add_page(p)
+            
+            bio = io.BytesIO(); temp_writer.write(bio); bio.seek(0)
+            for p in PdfReader(bio).pages: final_w.add_page(p)
+            merged = io.BytesIO(); final_w.write(merged)
+            
+            status.info("🔢 דוחס ומעלה...")
+            res = compress_if_needed(add_footer_numbers(merged.getvalue()))
+            
+            status.info("☁️ מעלה לדרייב...")
+            upload_final_pdf(st.session_state.folder_id, res, f"{final_name}.pdf")
+            
+            bar.progress(100)
+            st.balloons()
+            status.success(f"✅ בוצע! הקובץ מחכה בתיקייה.")
+            
+        except Exception as e: st.error(f"שגיאה: {e}")
+    st.markdown('</div>', unsafe_allow_html=True)
